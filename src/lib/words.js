@@ -1,8 +1,13 @@
-// Word bank. The host's browser picks the words for a match (no server on the free plan).
-// Entry format: [crewWord, clueForImposter, difficulty(1 easy, 2 medium, 3 hard)]
-// The imposter NEVER sees the crew word or a sibling word (like Coffee when the crew has Tea).
-// They only get a vague clue about the crew's word, plus the topic, and must bluff from that.
-// Rule for every clue: it describes the word without containing it.
+// Word bank + word picking (single file: copy/paste friendly).
+// Words normally come from the Firestore collection "words" (see README). THIS list is the built-in
+// fallback AND the source for scripts/seedWords.mjs, so you can also just edit it here.
+//
+// Entry format in BANK: [crewWord, imposterClue, difficulty]   difficulty: 1 easy, 2 medium, 3 hard
+// Rules for every clue: 1-2 words, loosely related, and it must NOT contain the crew word.
+// The imposter never sees the crew word or a sibling word; only the clue and the topic name.
+import { pick, shuffle } from './random.js';
+
+// To add a topic: add it here AND add a BANK entry below with the same key.
 export const CATEGORY_LABELS = {
   FOOD: 'Food & drink',
   ANIMALS: 'Animals',
@@ -22,158 +27,254 @@ export const CATEGORY_LABELS = {
 
 export const BANK = {
   FOOD: [
-    ['Tea', 'A hot drink made from leaves', 1], ['Coffee', 'A dark, bitter drink that wakes you up', 1],
-    ['Pizza', 'Round, cheesy and baked', 1], ['Biryani', 'Spiced rice layered with meat or veg', 1],
-    ['Dosa', 'A thin crispy South Indian crepe', 1], ['Chocolate', 'A sweet made from cocoa', 1],
-    ['Ice cream', 'A frozen dessert on a hot day', 1], ['Mango', 'A sweet tropical fruit, king of its kind', 1],
-    ['Samosa', 'A fried triangular snack', 2], ['Noodles', 'Long strands, often slurped', 2],
-    ['Lemonade', 'A sour-sweet cold drink', 2], ['Honey', 'Sticky and sweet, made by insects', 2],
-    ['Sandwich', 'Fillings between two slices', 2], ['Pickle', 'Preserved and tangy, served on the side', 3],
-    ['Butter', 'A soft dairy spread', 3], ['Popcorn', 'Puffs up when heated', 2],
+    // difficulty 1
+    ['Tea', 'Steeped', 1], ['Pizza', 'Round', 1], ['Biryani', 'Layers', 1], ['Chocolate', 'Melts', 1],
+    ['Mango', 'Stone', 1], ['Dosa', 'Fermented', 1], ['Ice cream', 'Brain freeze', 1], ['Samosa', 'Triangle', 1],
+    ['Noodles', 'Strands', 1], ['Honey', 'Amber', 1], ['Butter', 'Churned', 1], ['Popcorn', 'Cinema', 1],
+    // difficulty 2
+    ['Lemonade', 'Stand', 2], ['Sandwich', 'Earl', 2], ['Pickle', 'Brine', 2], ['Jalebi', 'Syrup', 2],
+    ['Idli', 'Steamed', 2], ['Paneer', 'Curdled', 2], ['Curd rice', 'Cooling', 2], ['Filter coffee', 'Tumbler', 2],
+    ['Pancake', 'Flip', 2], ['Burger', 'Stacked', 2], ['Waffle', 'Grid', 2], ['Cheese', 'Aged', 2],
+    // difficulty 3
+    ['Saffron', 'Threads', 3], ['Vinegar', 'Second life', 3], ['Yeast', 'Rising', 3], ['Jaggery', 'Unrefined', 3],
+    ['Leftovers', 'Tomorrow', 3], ['Salt', 'Crystal', 3], ['Tamarind', 'Tangy pods', 3], ['Ghee', 'Clarified', 3],
+    ['Sourdough', 'Starter', 3], ['Wasabi', 'Nose', 3], ['Caviar', 'Luxury', 3], ['Truffle', 'Hunted', 3],
   ],
   ANIMALS: [
-    ['Cat', 'A small pet that purrs', 1], ['Dog', 'A loyal pet that barks', 1],
-    ['Elephant', 'The largest land animal', 1], ['Tiger', 'A big striped hunter', 1],
-    ['Monkey', 'Swings through trees', 1], ['Peacock', 'A bird with a fancy fan of feathers', 1],
-    ['Dolphin', 'A clever sea mammal that jumps', 2], ['Camel', 'Survives in the desert with a hump', 2],
-    ['Owl', 'A night bird that hoots', 2], ['Snake', 'Has no legs and slithers', 2],
-    ['Bee', 'Makes something sweet and buzzes', 2], ['Crow', 'A smart black bird', 2],
-    ['Penguin', 'A bird that cannot fly but loves the cold', 2], ['Crocodile', 'A river reptile with a big jaw', 3],
-    ['Bat', 'A flying mammal that hangs upside down', 3],
+    // difficulty 1
+    ['Elephant', 'Memory', 1], ['Tiger', 'Fingerprint', 1], ['Peacock', 'Display', 1], ['Dolphin', 'Clicks', 1],
+    ['Camel', 'Caravan', 1], ['Penguin', 'Tuxedo', 1], ['Monkey', 'Branches', 1], ['Crow', 'Grudge', 1],
+    ['Owl', 'Nocturnal', 1], ['Snake', 'Coiled', 1], ['Bee', 'Colony', 1], ['Cat', 'Nine', 1],
+    // difficulty 2
+    ['Bat', 'Upside', 2], ['Octopus', 'Ink', 2], ['Chameleon', 'Mood', 2], ['Sloth', 'Algae', 2],
+    ['Crocodile', 'Tears', 2], ['Kangaroo', 'Hopping', 2], ['Giraffe', 'Reach', 2], ['Hedgehog', 'Curled up', 2],
+    ['Flamingo', 'Balance', 2], ['Parrot', 'Echo', 2], ['Squirrel', 'Hoard', 2], ['Cheetah', 'Sprint', 2],
+    // difficulty 3
+    ['Ant', 'Marching', 3], ['Spider', 'Silk', 3], ['Moth', 'Flame', 3], ['Cuckoo', 'Foster', 3],
+    ['Mosquito', 'Whine', 3], ['Earthworm', 'Soil', 3], ['Platypus', 'Oddity', 3], ['Pangolin', 'Armoured', 3],
+    ['Axolotl', 'Regrows', 3], ['Narwhal', 'Tusk', 3], ['Vulture', 'Patient', 3], ['Hyena', 'Cackle', 3],
   ],
   MOVIES: [
-    ['Popcorn', 'A snack you eat while watching', 1], ['Cinema', 'A dark hall with a huge screen', 1],
-    ['Actor', 'Someone who plays a character', 1], ['Director', 'Calls the shots on set', 2],
-    ['Villain', 'The one the hero fights', 1], ['Superhero', 'Has special powers and a costume', 1],
-    ['Cartoon', 'Drawn characters that move', 1], ['Sequel', 'The next part of a story', 2],
-    ['Trailer', 'A short preview', 2], ['Oscar', 'A golden trophy', 2],
-    ['Subtitles', 'Words at the bottom of the screen', 2], ['Script', 'What the actors read from', 3],
-    ['Stunt', 'A dangerous move done by a specialist', 3], ['Interval', 'A break in the middle of a film', 3],
+    // difficulty 1
+    ['Villain', 'Nemesis', 1], ['Trailer', 'Teaser', 1], ['Sequel', 'Part two', 1], ['Subtitles', 'Reading', 1],
+    ['Cameo', 'Blink', 1], ['Director', 'Megaphone', 1], ['Popcorn', 'Buttery', 1], ['Superhero', 'Cape', 1],
+    ['Cartoon', 'Saturday', 1], ['Oscar', 'Statuette', 1], ['Actor', 'Roles', 1], ['Cinema', 'Tickets', 1],
+    // difficulty 2
+    ['Plot twist', 'Reveal', 2], ['Blockbuster', 'Weekend', 2], ['Soundtrack', 'Score', 2],
+    ['Stuntman', 'Falling', 2], ['Spoiler', 'Ending', 2], ['Remake', 'Again', 2], ['Screenplay', 'Pages', 2],
+    ['Dubbing', 'Voices', 2], ['Cliffhanger', 'Unresolved', 2], ['Intermission', 'Pause', 2], ['Heist', 'Vault', 2],
+    ['Documentary', 'Real', 2],
+    // difficulty 3
+    ['Plot hole', 'Gap', 3], ['Binge watching', 'All night', 3], ['Montage', 'Compressed', 3],
+    ['Prequel', 'Before', 3], ['Noir', 'Shadows', 3], ['Franchise', 'Universe', 3], ['Credits', 'Scroll', 3],
+    ['Dystopia', 'Bleak', 3], ['Biopic', 'Life', 3], ['Slapstick', 'Pratfalls', 3], ['Voiceover', 'Unseen', 3],
+    ['Auteur', 'Vision', 3],
   ],
   PLACES: [
-    ['Beach', 'Sand, waves and sunshine', 1], ['Airport', 'Where flights take off', 1],
-    ['Hospital', 'Doctors and nurses work here', 1], ['Library', 'Quiet and full of shelves', 1],
-    ['Temple', 'A place of worship', 1], ['Zoo', 'Animals live here for visitors', 1],
-    ['Museum', 'Old and valuable things on display', 2], ['Market', 'Stalls, bargaining and crowds', 2],
-    ['Desert', 'Very dry and sandy', 2], ['Island', 'Surrounded by water on every side', 2],
-    ['Castle', 'A fortified home of royalty', 2], ['Railway station', 'Platforms and announcements', 2],
-    ['Waterfall', 'Water dropping from a height', 3], ['Lighthouse', 'Guides ships at night', 3],
+    // difficulty 1
+    ['Airport', 'Gates', 1], ['Library', 'Hush', 1], ['Hospital', 'Wards', 1], ['Market', 'Haggle', 1],
+    ['Railway station', 'Whistles', 1], ['Beach', 'Tide', 1], ['Temple', 'Bells', 1], ['Zoo', 'Roaring', 1],
+    ['Museum', 'Glass cases', 1], ['Desert', 'Mirage', 1], ['Island', 'Isolated', 1], ['Castle', 'Moat', 1],
+    // difficulty 2
+    ['Lighthouse', 'Beam', 2], ['Stadium', 'Roar', 2], ['Waterfall', 'Plunge', 2], ['Cemetery', 'Remembrance', 2],
+    ['Bakery', 'Dawn', 2], ['Harbour', 'Anchors', 2], ['Orchard', 'Rows', 2], ['Observatory', 'Dome', 2],
+    ['Bridge', 'Spanning', 2], ['Monastery', 'Vows', 2], ['Casino', 'Gamble', 2], ['Aquarium', 'Glass tunnels', 2],
+    // difficulty 3
+    ['Border', 'Lines', 3], ['Attic', 'Dust', 3], ['Crossroads', 'Choices', 3], ['Ruins', 'Echoes', 3],
+    ['Waiting room', 'Magazines', 3], ['Rooftop', 'Skyline', 3], ['Lobby', 'Revolving', 3], ['Basement', 'Below', 3],
+    ['Courtyard', 'Enclosed', 3], ['Alley', 'Shortcut', 3], ['Bunker', 'Shelter', 3], ['Greenhouse', 'Humid', 3],
   ],
   SPORTS: [
-    ['Cricket', 'Played with a bat and wickets', 1], ['Football', 'Eleven players chase a round ball', 1],
-    ['Tennis', 'Played over a net with rackets', 1], ['Chess', 'A board game of kings and pawns', 1],
-    ['Swimming', 'Done in a pool', 1], ['Badminton', 'Uses a shuttle, not a ball', 2],
-    ['Kabaddi', 'A contact team game where you hold your breath and chant', 2], ['Boxing', 'Fought in a ring with gloves', 2],
-    ['Marathon', 'A very long race', 2], ['Archery', 'Aiming arrows at a target', 2],
-    ['Hockey', 'Players use sticks on a pitch', 2], ['Carrom', 'A board game flicked with a striker', 3],
-    ['Skating', 'Gliding on wheels or blades', 2], ['Golf', 'Hit a tiny ball into a hole', 3],
+    // difficulty 1
+    ['Cricket', 'Five days', 1], ['Chess', 'Sacrifice', 1], ['Kabaddi', 'Breath', 1], ['Archery', 'Release', 1],
+    ['Marathon', 'Endurance', 1], ['Carrom', 'Powder', 1], ['Football', 'Offside', 1], ['Tennis', 'Love', 1],
+    ['Swimming', 'Laps', 1], ['Hockey', 'Curved', 1], ['Boxing', 'Bell', 1], ['Golf', 'Birdie', 1],
+    // difficulty 2
+    ['Badminton', 'Feathers', 2], ['Skating', 'Glide', 2], ['Wrestling', 'Pinned', 2], ['Cycling', 'Peloton', 2],
+    ['Volleyball', 'Spike', 2], ['Basketball', 'Hoops', 2], ['Rugby', 'Scrum', 2], ['Judo', 'Throws', 2],
+    ['Fencing', 'Foil', 2], ['Snooker', 'Baize', 2], ['Polo', 'Mallet', 2], ['Rowing', 'Synchronised', 2],
+    // difficulty 3
+    ['Referee', 'Blamed', 3], ['Penalty', 'Spot', 3], ['Underdog', 'Odds', 3], ['Warm-up', 'Stretching', 3],
+    ['Trophy', 'Gleaming', 3], ['Stopwatch', 'Seconds', 3], ['Decathlon', 'Ten', 3], ['Pole vault', 'Bar', 3],
+    ['Javelin', 'Throw', 3], ['Triathlon', 'Three', 3], ['Curling', 'Sweeping', 3], ['Sumo', 'Topknot', 3],
   ],
   TECHNOLOGY: [
-    ['Phone', 'Always in your pocket', 1], ['Laptop', 'A portable computer', 1],
-    ['Wifi', 'Wireless internet', 1], ['Keyboard', 'You type on it', 1],
-    ['Camera', 'Captures moments', 1], ['Charger', 'Fills up a battery', 1],
-    ['Headphones', 'Private listening', 2], ['Robot', 'A machine that follows programs', 2],
-    ['Drone', 'Flies without a pilot on board', 2], ['Printer', 'Turns screen into paper', 2],
-    ['Password', 'A secret you type to get in', 2], ['Email', 'An online letter', 2],
-    ['Satellite', 'Orbits high above the Earth', 3], ['Server', 'A computer that serves others', 3],
+    // difficulty 1
+    ['Wifi', 'Invisible', 1], ['Password', 'Forgotten', 1], ['Charger', 'Percent', 1], ['Email', 'Regards', 1],
+    ['Drone', 'Hovering', 1], ['Keyboard', 'Qwerty', 1], ['Phone', 'Pocket', 1], ['Laptop', 'Lap', 1],
+    ['Camera', 'Shutter', 1], ['Headphones', 'Isolation', 1], ['Robot', 'Obedient', 1], ['Printer', 'Jam', 1],
+    // difficulty 2
+    ['Satellite', 'Orbit', 2], ['Algorithm', 'Steps', 2], ['Bluetooth', 'Viking', 2], ['Cache', 'Remembered', 2],
+    ['Firewall', 'Barrier', 2], ['Pixel', 'Tiny', 2], ['Server', 'Racks', 2], ['Router', 'Blinking', 2],
+    ['Hashtag', 'Pound', 2], ['Emoji', 'Faces', 2], ['Podcast', 'Episodes', 2], ['Browser', 'Tabs', 2],
+    // difficulty 3
+    ['Cloud', 'Elsewhere', 3], ['Bug', 'Glitch', 3], ['Notification', 'Buzz', 3], ['Update', 'Restart', 3],
+    ['Captcha', 'Crosswalks', 3], ['Backup', 'Insurance', 3], ['Blockchain', 'Ledger', 3],
+    ['Firmware', 'Embedded', 3], ['Encryption', 'Scrambled', 3], ['Latency', 'Lag', 3], ['Avatar', 'Alter ego', 3],
+    ['Malware', 'Infected', 3],
   ],
   EVERYDAY: [
-    ['Umbrella', 'Useful when it pours', 1], ['Mirror', 'Shows your reflection', 1],
-    ['Pillow', 'Rests your head at night', 1], ['Spoon', 'Used for soup', 1],
-    ['Clock', 'Tells you the time', 1], ['Key', 'Opens a lock', 1],
-    ['Towel', 'Dries you off', 2], ['Candle', 'Gives a small flame of light', 2],
-    ['Backpack', 'Carries things on your shoulders', 2], ['Broom', 'Sweeps the floor', 2],
-    ['Scissors', 'Two blades that cut paper', 2], ['Wallet', 'Holds notes and cards', 2],
-    ['Bucket', 'Carries water', 3], ['Hanger', 'Hangs shirts in a wardrobe', 3],
+    // difficulty 1
+    ['Umbrella', 'Forgotten', 1], ['Mirror', 'Reversed', 1], ['Key', 'Teeth', 1], ['Pillow', 'Dreams', 1],
+    ['Candle', 'Wick', 1], ['Scissors', 'Pair', 1], ['Spoon', 'Stirring', 1], ['Clock', 'Ticking', 1],
+    ['Towel', 'Damp', 1], ['Backpack', 'Straps', 1], ['Broom', 'Bristles', 1], ['Wallet', 'Cards', 1],
+    // difficulty 2
+    ['Hanger', 'Wardrobe', 2], ['Zipper', 'Teeth', 2], ['Bucket', 'Handle', 2], ['Torch', 'Beam', 2],
+    ['Remote', 'Lost', 2], ['Receipt', 'Proof', 2], ['Alarm', 'Snooze', 2], ['Doorbell', 'Chime', 2],
+    ['Spectacles', 'Frames', 2], ['Toothbrush', 'Morning', 2], ['Comb', 'Tangles', 2], ['Razor', 'Edge', 2],
+    // difficulty 3
+    ['Thimble', 'Fingertip', 3], ['Funnel', 'Narrowing', 3], ['Hourglass', 'Grains', 3],
+    ['Padlock', 'Combination', 3], ['Kettle', 'Whistling', 3], ['Ladder', 'Rungs', 3], ['Abacus', 'Beads', 3],
+    ['Magnet', 'Poles', 3], ['Matchbox', 'Strike', 3], ['Needle', 'Eye', 3], ['Plug', 'Socket', 3],
+    ['Sieve', 'Holes', 3],
   ],
   NATURE: [
-    ['Rain', 'Falls from the clouds', 1], ['Mountain', 'A very high landform', 1],
-    ['River', 'Flows to the sea', 1], ['Sun', 'Our nearest star', 1],
-    ['Moon', 'Shines at night and changes shape', 1], ['Forest', 'Thousands of trees together', 1],
-    ['Rainbow', 'Colours after a shower', 2], ['Volcano', 'Can erupt with hot rock', 2],
-    ['Thunder', 'A loud sound in a storm', 2], ['Cave', 'A hollow inside rock', 2],
-    ['Monsoon', 'A season of heavy rain', 2], ['Coral', 'Colourful life under the sea', 3],
-    ['Fog', 'Low cloud that blocks the view', 3], ['Earthquake', 'The ground shakes', 3],
+    // difficulty 1
+    ['Rainbow', 'Prism', 1], ['Volcano', 'Magma', 1], ['Monsoon', 'Season', 1], ['Moon', 'Phases', 1],
+    ['Forest', 'Canopy', 1], ['Earthquake', 'Tremor', 1], ['Rain', 'Puddles', 1], ['Mountain', 'Summit', 1],
+    ['River', 'Banks', 1], ['Sun', 'Eclipse', 1], ['Fog', 'Veil', 1], ['Thunder', 'Rumble', 1],
+    // difficulty 2
+    ['Cave', 'Stalactites', 2], ['Coral', 'Reef', 2], ['Glacier', 'Slow', 2], ['Dew', 'Morning', 2],
+    ['Cyclone', 'Eye', 2], ['Tornado', 'Spiral', 2], ['Lightning', 'Forked', 2], ['Savanna', 'Grasslands', 2],
+    ['Tundra', 'Frozen', 2], ['Swamp', 'Murky', 2], ['Lagoon', 'Shallows', 2], ['Waterfall', 'Cascade', 2],
+    // difficulty 3
+    ['Shadow', 'Follower', 3], ['Horizon', 'Unreachable', 3], ['Tide', 'Pull', 3], ['Seed', 'Potential', 3],
+    ['Echo', 'Reply', 3], ['Season', 'Cycle', 3], ['Aurora', 'Curtains', 3], ['Drought', 'Cracked', 3],
+    ['Avalanche', 'Slide', 3], ['Canyon', 'Carved', 3], ['Estuary', 'Mixing', 3], ['Equinox', 'Balance', 3],
   ],
   JOBS: [
-    ['Doctor', 'Heals the sick', 1], ['Teacher', 'Explains lessons to a class', 1],
-    ['Farmer', 'Grows the crops', 1], ['Pilot', 'Flies high above you', 1],
-    ['Chef', 'Works in a busy kitchen', 1], ['Police officer', 'Keeps order and wears a uniform', 1],
-    ['Engineer', 'Designs and builds things', 2], ['Tailor', 'Stitches and measures', 2],
-    ['Barber', 'Trims hair and beards', 2], ['Photographer', 'Says "smile" a lot', 2],
-    ['Lawyer', 'Argues in court', 2], ['Plumber', 'Fixes leaks', 2],
-    ['Astronaut', 'Works far beyond the sky', 3], ['Librarian', 'Keeps the books in order', 3],
+    // difficulty 1
+    ['Pilot', 'Cockpit', 1], ['Chef', 'Tasting', 1], ['Tailor', 'Measures', 1], ['Farmer', 'Harvest', 1],
+    ['Barber', 'Chair', 1], ['Photographer', 'Frame', 1], ['Doctor', 'Rounds', 1], ['Teacher', 'Chalk', 1],
+    ['Police officer', 'Beat', 1], ['Engineer', 'Blueprints', 1], ['Plumber', 'Wrench', 1], ['Lawyer', 'Briefs', 1],
+    // difficulty 2
+    ['Astronaut', 'Gravity', 2], ['Librarian', 'Shelves', 2], ['Electrician', 'Circuits', 2],
+    ['Pharmacist', 'Prescriptions', 2], ['Journalist', 'Deadlines', 2], ['Surgeon', 'Steady', 2],
+    ['Carpenter', 'Joints', 2], ['Mechanic', 'Grease', 2], ['Nurse', 'Shifts', 2], ['Accountant', 'Ledgers', 2],
+    ['Firefighter', 'Sirens', 2], ['Magician', 'Misdirection', 2],
+    // difficulty 3
+    ['Interpreter', 'Neutral', 3], ['Auditor', 'Discrepancies', 3], ['Architect', 'Drafts', 3],
+    ['Detective', 'Hunches', 3], ['Cartographer', 'Scale', 3], ['Archaeologist', 'Layers', 3],
+    ['Sommelier', 'Vintage', 3], ['Curator', 'Selecting', 3], ['Coroner', 'Verdict', 3], ['Locksmith', 'Tumblers', 3],
+    ['Midwife', 'Delivery', 3], ['Auctioneer', 'Bids', 3],
   ],
   MUSIC: [
-    ['Guitar', 'Has strings you strum', 1], ['Drums', 'You hit them with sticks', 1],
-    ['Piano', 'Black and white keys', 1], ['Flute', 'Played by blowing across it', 2],
-    ['Violin', 'Played with a bow', 2], ['Singer', 'Uses their voice on stage', 1],
-    ['Concert', 'A live show with a crowd', 1], ['Microphone', 'Makes a voice louder', 2],
-    ['Tabla', 'A pair of hand drums from India', 2], ['Choir', 'Many voices as one', 2],
-    ['Lullaby', 'Sung to help a baby sleep', 3], ['Playlist', 'A list of songs lined up', 2],
-    ['Whistle', 'Made with your lips', 3], ['Remix', 'An old song made new', 3],
+    // difficulty 1
+    ['Guitar', 'Frets', 1], ['Piano', 'Pedals', 1], ['Drums', 'Beat', 1], ['Flute', 'Breath', 1],
+    ['Violin', 'Rosin', 1], ['Tabla', 'Pair', 1], ['Singer', 'Stage', 1], ['Concert', 'Crowd', 1],
+    ['Microphone', 'Feedback', 1], ['Choir', 'Blend', 1], ['Lullaby', 'Bedtime', 1], ['Playlist', 'Queue', 1],
+    // difficulty 2
+    ['Rhythm', 'Pulse', 2], ['Harmony', 'Agreeing', 2], ['Encore', 'Demanded', 2], ['Karaoke', 'Screen', 2],
+    ['Anthem', 'Standing', 2], ['Lyrics', 'Misheard', 2], ['Remix', 'Reworked', 2], ['Orchestra', 'Conductor', 2],
+    ['Saxophone', 'Reed', 2], ['Trumpet', 'Valves', 2], ['Sitar', 'Resonance', 2], ['Harmonium', 'Bellows', 2],
+    // difficulty 3
+    ['Octave', 'Eight', 3], ['Crescendo', 'Swelling', 3], ['Falsetto', 'Higher', 3], ['Acoustic', 'Unplugged', 3],
+    ['Opera', 'Arias', 3], ['Metronome', 'Ticking', 3], ['Chorus', 'Hook', 3], ['Ballad', 'Slow', 3],
+    ['Overture', 'Opening', 3], ['Vinyl', 'Grooves', 3], ['Baton', 'Wand', 3], ['Duet', 'Pairing', 3],
   ],
   CLOTHING: [
-    ['Saree', 'A long draped garment', 1], ['Shirt', 'Has buttons and a collar', 1],
-    ['Jeans', 'Blue and tough', 1], ['Shoes', 'Worn on your feet', 1],
-    ['Cap', 'Shades your eyes from the sun', 1], ['Watch', 'Worn on the wrist', 1],
-    ['Scarf', 'Wraps around your neck', 2], ['Sunglasses', 'Stylish eye protection', 2],
-    ['Jacket', 'An extra layer for cold weather', 2], ['Slippers', 'Casual and easy to slip on', 2],
-    ['Belt', 'Keeps trousers in place', 2], ['Gloves', 'Five fingers each', 2],
-    ['Dhoti', 'A traditional wrap worn around the waist', 3], ['Necklace', 'Jewellery that hangs', 3],
+    // difficulty 1
+    ['Saree', 'Drape', 1], ['Jeans', 'Rivets', 1], ['Watch', 'Hands', 1], ['Sunglasses', 'Squinting', 1],
+    ['Slippers', 'Indoors', 1], ['Scarf', 'Winding', 1], ['Shirt', 'Cuffs', 1], ['Shoes', 'Laces', 1],
+    ['Cap', 'Visor', 1], ['Belt', 'Notches', 1], ['Gloves', 'Pairs', 1], ['Jacket', 'Layer', 1],
+    // difficulty 2
+    ['Dhoti', 'Knotted', 2], ['Uniform', 'Identical', 2], ['Necklace', 'Clasp', 2], ['Button', 'Holes', 2],
+    ['Pocket', 'Deep', 2], ['Hem', 'Edge', 2], ['Collar', 'Starched', 2], ['Sole', 'Tread', 2],
+    ['Thread', 'Spool', 2], ['Lungi', 'Checks', 2], ['Turban', 'Wound', 2], ['Kurta', 'Tunic', 2],
+    // difficulty 3
+    ['Cufflinks', 'Formal', 3], ['Corset', 'Laced', 3], ['Poncho', 'Cloak', 3], ['Bandana', 'Paisley', 3],
+    ['Sash', 'Across', 3], ['Shawl', 'Wool', 3], ['Waistcoat', 'Layered', 3], ['Apron', 'Splashes', 3],
+    ['Veil', 'Concealing', 3], ['Stilettos', 'Spikes', 3], ['Beret', 'Slanted', 3],
   ],
   TRANSPORT: [
-    ['Bus', 'Many passengers, fixed stops', 1], ['Train', 'Runs on tracks', 1],
-    ['Bicycle', 'Two wheels and pedals', 1], ['Airplane', 'Crosses countries in hours', 1],
-    ['Auto rickshaw', 'A three-wheeled taxi', 1], ['Ship', 'Sails across the ocean', 1],
-    ['Motorbike', 'Fast, two wheels, a helmet needed', 2], ['Metro', 'Runs underground in big cities', 2],
-    ['Helicopter', 'Takes off straight up', 2], ['Ambulance', 'Rushes with sirens', 2],
-    ['Boat', 'Floats on a river or lake', 2], ['Tractor', 'Works in the fields', 3],
-    ['Scooter', 'Small and handy for the city', 3], ['Truck', 'Carries heavy loads on highways', 3],
+    // difficulty 1
+    ['Metro', 'Underground', 1], ['Auto rickshaw', 'Meter', 1], ['Helicopter', 'Rotors', 1],
+    ['Tractor', 'Furrows', 1], ['Ship', 'Hull', 1], ['Ambulance', 'Urgency', 1], ['Bus', 'Stops', 1],
+    ['Train', 'Whistle', 1], ['Bicycle', 'Spokes', 1], ['Airplane', 'Turbulence', 1], ['Motorbike', 'Helmet', 1],
+    ['Scooter', 'Kickstand', 1],
+    // difficulty 2
+    ['Truck', 'Horn', 2], ['Taxi', 'Fare', 2], ['Boat', 'Ripples', 2], ['Canoe', 'Narrow', 2],
+    ['Ferry', 'Crossing', 2], ['Submarine', 'Depth', 2], ['Tram', 'Overhead', 2], ['Cable car', 'Suspended', 2],
+    ['Rocket', 'Countdown', 2], ['Jeep', 'Rugged', 2], ['Van', 'Sliding', 2], ['Cart', 'Creaking', 2],
+    // difficulty 3
+    ['Traffic', 'Gridlock', 3], ['Luggage', 'Weigh', 3], ['Ticket', 'Stub', 3], ['Highway', 'Tolls', 3],
+    ['Signal', 'Amber', 3], ['Platform', 'Gap', 3], ['Passport', 'Stamped', 3], ['Roundabout', 'Circles', 3],
+    ['Parking', 'Reverse', 3], ['Flyover', 'Bypass', 3], ['Runway', 'Lights', 3],
   ],
   SCHOOL: [
-    ['Pencil', 'Can be erased', 1], ['Notebook', 'Pages for writing', 1],
-    ['Blackboard', 'Chalk dust everywhere', 1], ['Exam', 'Makes students nervous', 1],
-    ['Homework', 'Work you do after class', 1], ['Uniform', 'Everyone dresses the same', 1],
-    ['Calculator', 'Does sums for you', 2], ['Backbench', 'Where some students love to sit', 2],
-    ['Timetable', 'Tells you what comes next', 2], ['Principal', 'The head of the institution', 2],
-    ['Stapler', 'Clicks pages together', 3], ['Whiteboard', 'Erasable and shiny', 2],
-    ['Meeting', 'People gather around a table to talk', 2], ['Printer paper', 'Comes in reams', 3],
+    // difficulty 1
+    ['Blackboard', 'Duster', 1], ['Homework', 'Excuse', 1], ['Calculator', 'Sums', 1], ['Notebook', 'Margins', 1],
+    ['Principal', 'Strict', 1], ['Timetable', 'Periods', 1], ['Pencil', 'Sharpened', 1], ['Exam', 'Hall', 1],
+    ['Eraser', 'Smudges', 1], ['Textbook', 'Chapters', 1], ['Bell', 'Ringing', 1], ['Chalk', 'Dust', 1],
+    // difficulty 2
+    ['Stapler', 'Jaws', 2], ['Whiteboard', 'Squeaky', 2], ['Meeting', 'Agenda', 2], ['Deadline', 'Looming', 2],
+    ['Resume', 'Summary', 2], ['Attendance', 'Present', 2], ['Backbench', 'Rebels', 2], ['Intern', 'Apprentice', 2],
+    ['Syllabus', 'Contents', 2], ['Break', 'Queue', 2], ['Promotion', 'Climb', 2], ['Fire drill', 'Assembly', 2],
+    // difficulty 3
+    ['Memo', 'Circulated', 3], ['Printer', 'Toner', 3], ['Spreadsheet', 'Cells', 3], ['Presentation', 'Slides', 3],
+    ['Appraisal', 'Review', 3], ['Onboarding', 'Orientation', 3], ['Quorum', 'Minimum', 3],
+    ['Minutes', 'Recorded', 3], ['Handout', 'Distributed', 3], ['Thesis', 'Defended', 3], ['Scholarship', 'Merit', 3],
   ],
   FESTIVALS: [
-    ['Diwali', 'The festival of lights', 1], ['Pongal', 'A harvest celebration with a boiling pot', 1],
-    ['Birthday', 'Once a year, with a cake', 1], ['Wedding', 'Two families unite', 1],
-    ['Christmas', 'A tree and presents', 1], ['Holi', 'Colours thrown in the air', 1],
-    ['Eid', 'Celebrated after a month of fasting', 2], ['Fireworks', 'Bright bursts in the night sky', 2],
-    ['Rangoli', 'Colourful patterns on the floor', 2], ['New Year', 'Countdown at midnight', 2],
-    ['Gift', 'Wrapped and given with love', 2], ['Garland', 'Flowers strung together', 3],
-    ['Procession', 'A crowd moving together with music', 3], ['Sweets', 'Boxes shared with neighbours', 2],
+    // difficulty 1
+    ['Diwali', 'Lamps', 1], ['Pongal', 'Overflowing', 1], ['Holi', 'Powder', 1], ['Christmas', 'Stockings', 1],
+    ['Eid', 'Crescent', 1], ['Wedding', 'Vows', 1], ['Birthday', 'Wishes', 1], ['New Year', 'Midnight', 1],
+    ['Fireworks', 'Sparks', 1], ['Rangoli', 'Doorstep', 1], ['Garland', 'Strung', 1], ['Procession', 'Chariot', 1],
+    // difficulty 2
+    ['Gift', 'Wrapped', 2], ['Reunion', 'Cousins', 2], ['Feast', 'Banquet', 2], ['Tradition', 'Inherited', 2],
+    ['Lantern', 'Glowing', 2], ['Prayer', 'Upward', 2], ['Navratri', 'Nine nights', 2], ['Onam', 'Boat races', 2],
+    ['Ganesh Chaturthi', 'Immersion', 2], ['Thanksgiving', 'Gratitude', 2], ['Halloween', 'Costumes', 2],
+    ['Carnival', 'Masks', 2],
+    // difficulty 3
+    ['Sweets', 'Boxes', 3], ['Mehndi', 'Intricate', 3], ['Bonfire', 'Embers', 3], ['Pilgrimage', 'Journey', 3],
+    ['Confetti', 'Shower', 3], ['Rituals', 'Sequence', 3], ['Parade', 'Floats', 3], ['Anniversary', 'Annual', 3],
+    ['Housewarming', 'Threshold', 3], ['Baptism', 'Waters', 3], ['Farewell', 'Speeches', 3],
   ],
 };
 
+/** BANK -> flat rows ({category, categoryLabel, word, hint, difficulty}); used by the seed script. */
+export const WORD_ROWS = Object.entries(BANK).flatMap(([category, list]) => list.map(([word, hint, difficulty]) => ({
+  category, categoryLabel: CATEGORY_LABELS[category] || category, word, hint, difficulty,
+})));
+
+/** Firestore rows -> { bank: {CATEGORY: [[word, hint, difficulty, id?]]}, labels: {CATEGORY: label} } */
+export function buildBank(rows) {
+  const bank = {}; const labels = {};
+  rows.forEach((r) => {
+    if (!r?.category || !r?.word || !r?.hint) return;
+    const d = Number(r.difficulty);
+    (bank[r.category] ||= []).push([String(r.word), String(r.hint), d >= 1 && d <= 3 ? d : 2, r.id]);
+    labels[r.category] ||= r.categoryLabel || r.category;
+  });
+  return { bank, labels };
+}
+
+const built = { bank: BANK, labels: CATEGORY_LABELS };
 export const CATEGORIES = Object.keys(BANK);
 const DIFF = { EASY: 1, MEDIUM: 2, HARD: 3 };
-import { pick, shuffle } from './random.js';
 
 /**
  * Pick the crew word and the imposter's clue automatically.
  * With category RANDOM a topic is chosen at random each match (never the same topic twice in a
  * row when avoidable), then a word from it that has not been used recently in this room.
- * @returns {{id:string, word:string, hint:string, imposterWord:string, category:string, categoryLabel:string}}
+ * `source` is optional ({bank, labels} from Firestore); defaults to the built-in list above.
+ * @returns {{id:string, word:string, hint:string, imposterWord:string, category:string, categoryLabel:string, difficulty:number}}
  */
-export function pickWords({ category = 'RANDOM', difficulty = 'ANY', recent = [] } = {}) {
+export function pickWords({ category = 'RANDOM', difficulty = 'ANY', recent = [], source = built } = {}) {
+  const useSource = source?.bank && Object.keys(source.bank).length ? source : built;
+  const { bank, labels } = useSource;
+  const all = Object.keys(bank);
   const lastCat = recent.length ? String(recent[recent.length - 1]).split(':')[0] : null;
-  let cats = category === 'RANDOM' || !BANK[category] ? CATEGORIES : [category];
+  let cats = category === 'RANDOM' || !bank[category] ? all : [category];
   if (cats.length > 1) cats = cats.filter((c) => c !== lastCat);
 
-  const poolFor = (list, strict) => list.flatMap((c) => BANK[c]
-    .map((p, i) => ({ id: `${c}:${i}`, c, p }))
+  const poolFor = (list, strict) => list.flatMap((c) => bank[c]
+    .map((p, i) => ({ id: p[3] ? `${c}:${p[3]}` : `${c}:${i}`, c, p }))
     .filter((x) => (!strict || difficulty === 'ANY' || DIFF[difficulty] === x.p[2])));
 
   // Choose the topic first (so big topics do not dominate), falling back if it has nothing left.
-  const order = shuffle(cats);
   let chosen = null;
-  for (const c of order) {
+  for (const c of shuffle(cats)) {
     const fresh = poolFor([c], true).filter((x) => !recent.includes(x.id));
     if (fresh.length) { chosen = pick(fresh); break; }
   }
@@ -181,6 +282,6 @@ export function pickWords({ category = 'RANDOM', difficulty = 'ANY', recent = []
     const any = poolFor(cats, true);
     chosen = pick(any.length ? any : poolFor(cats, false));
   }
-  const [word, hint] = chosen.p;
-  return { id: chosen.id, word, hint, imposterWord: hint, category: chosen.c, categoryLabel: CATEGORY_LABELS[chosen.c] };
+  const [word, hint, diff] = chosen.p;
+  return { id: chosen.id, word, hint, imposterWord: hint, category: chosen.c, categoryLabel: labels[chosen.c] || chosen.c, difficulty: diff };
 }
