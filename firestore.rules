@@ -1,0 +1,240 @@
+rules_version = '2';
+// FREE-PLAN DESIGN (no Cloud Functions): the host's browser acts as the game "server".
+// These rules are what stop everyone else from cheating: only the host may write game state,
+// roles are readable only by their owner, votes/secrets are host-only, and every player write
+// (clue, vote, ready, join) is validated here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function namePath(n) { return /databases/$(database)/documents/usernames/$(n); }
+    function roomPath(roomId) { return /databases/$(database)/documents/rooms/$(roomId); }
+    function memberPath(roomId, uid) { return /databases/$(database)/documents/rooms/$(roomId)/members/$(uid); }
+    function rolePath(roomId, uid) { return /databases/$(database)/documents/rooms/$(roomId)/privateRoles/$(uid); }
+    function roundPath(roomId, roundId) { return /databases/$(database)/documents/rooms/$(roomId)/rounds/$(roundId); }
+    function histPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/history/$(id); }
+    function isMember(roomId) { return signedIn() && exists(memberPath(roomId, request.auth.uid)); }
+    function isHost(roomId) {
+      return signedIn() && exists(roomPath(roomId)) && get(roomPath(roomId)).data.hostUid == request.auth.uid;
+    }
+
+    // ---------- users ----------
+    function profileEdit(uid) {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['avatar', 'fullName', 'displayName', 'displayNameLower'])
+        && d.avatar is string && d.avatar.size() <= 24
+        && d.fullName is string && d.fullName.size() <= 60
+        && d.displayNameLower.size() >= 3 && d.displayNameLower.size() <= 20
+        && (d.displayNameLower == o.displayNameLower
+            || (!exists(namePath(d.displayNameLower)) && getAfter(namePath(d.displayNameLower)).data.uid == uid));
+    }
+    // Stats may only change by exactly one finished game, and only together with a history record
+    // that is itself checked against the room's finished round (see history rules).
+    function statsUpdate(uid) {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['gamesPlayed', 'gamesWon', 'lastMatchId'])
+        && d.lastMatchId is string
+        && d.gamesPlayed == o.gamesPlayed + 1
+        && !exists(histPath(uid, d.lastMatchId))
+        && existsAfter(histPath(uid, d.lastMatchId))
+        && d.gamesWon == o.gamesWon + (getAfter(histPath(uid, d.lastMatchId)).data.won == true ? 1 : 0);
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'displayNameLower', 'fullName', 'email', 'photoURL', 'avatar', 'createdAt', 'gamesPlayed', 'gamesWon'])
+        && request.resource.data.uid == uid
+        && request.resource.data.gamesPlayed == 0 && request.resource.data.gamesWon == 0
+        && request.resource.data.createdAt == request.time
+        && existsAfter(namePath(request.resource.data.displayNameLower))
+        && getAfter(namePath(request.resource.data.displayNameLower)).data.uid == uid;
+      allow update: if isOwner(uid) && (profileEdit(uid) || statsUpdate(uid));
+      allow delete: if isOwner(uid);
+
+      match /history/{matchId} {
+        allow read: if isOwner(uid);
+        allow delete: if isOwner(uid);
+        // A result can only be recorded once, for a round whose result the host finalised,
+        // with the player's own role and the matching win/loss.
+        allow create: if isOwner(uid)
+          && request.resource.data.matchId == matchId
+          && get(roundPath(request.resource.data.roomId, request.resource.data.roundId)).data.result.matchOver == true
+          && get(roundPath(request.resource.data.roomId, request.resource.data.roundId)).data.matchId == matchId
+          && get(rolePath(request.resource.data.roomId, uid)).data.matchId == matchId
+          && request.resource.data.role == get(rolePath(request.resource.data.roomId, uid)).data.role
+          && request.resource.data.won == ((get(rolePath(request.resource.data.roomId, uid)).data.role == 'IMPOSTER')
+               == (get(roundPath(request.resource.data.roomId, request.resource.data.roundId)).data.result.winner == 'IMPOSTER'));
+        allow update: if false;
+      }
+    }
+
+    // Unique display names. Anyone may check one name (needed at sign-up); nobody can list them.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid && name.size() >= 3 && name.size() <= 20;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Unique room codes: create-only, so two rooms can never share a code.
+    match /roomCodes/{code} {
+      allow get: if signedIn();
+      allow list, update: if false;
+      allow create: if signedIn() && code.matches('^[A-Z0-9]{6}$')
+        && request.resource.data.keys().hasOnly(['roomId', 'hostUid'])
+        && request.resource.data.hostUid == request.auth.uid && request.resource.data.roomId is string;
+      allow delete: if isHost(resource.data.roomId);
+    }
+
+    // ---------- rooms ----------
+    function joinUpdate(roomId) {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['memberCount'])
+        && o.status == 'WAITING'
+        && d.memberCount == o.memberCount + 1 && d.memberCount <= o.settings.maxPlayers
+        && !exists(memberPath(roomId, request.auth.uid)) && existsAfter(memberPath(roomId, request.auth.uid));
+    }
+    function leaveUpdate(roomId) {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['memberCount'])
+        && d.memberCount == o.memberCount - 1
+        && exists(memberPath(roomId, request.auth.uid)) && !existsAfter(memberPath(roomId, request.auth.uid));
+    }
+    // Host takeover: any member can flag a host that went offline; after 30 server-seconds the
+    // successor may claim host. (Presence is a lastSeen heartbeat on the member document.)
+    function markHostGone(roomId) {
+      let d = request.resource.data;
+      let o = resource.data;
+      return isMember(roomId) && d.diff(o).affectedKeys().hasOnly(['hostDisconnectedAt'])
+        && !('hostDisconnectedAt' in o) && d.hostDisconnectedAt == request.time;
+    }
+    function claimHost(roomId) {
+      let d = request.resource.data;
+      let o = resource.data;
+      return isMember(roomId) && d.diff(o).affectedKeys().hasOnly(['hostUid', 'hostDisconnectedAt'])
+        && d.hostUid == request.auth.uid && ('hostDisconnectedAt' in o) && !('hostDisconnectedAt' in d)
+        && request.time > o.hostDisconnectedAt + duration.value(30, 's');
+    }
+
+    match /rooms/{roomId} {
+      allow get: if signedIn();   // needed to join by code; nothing secret lives here
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == 'WAITING' && request.resource.data.memberCount == 1
+        && request.resource.data.settings.maxPlayers is int
+        && request.resource.data.settings.maxPlayers >= 3 && request.resource.data.settings.maxPlayers <= 30
+        && request.resource.data.settings.imposters is int
+        && request.resource.data.settings.imposters >= 1 && request.resource.data.settings.imposters <= 10;
+      allow update: if signedIn() && (resource.data.hostUid == request.auth.uid
+        || joinUpdate(roomId) || leaveUpdate(roomId) || markHostGone(roomId) || claimHost(roomId));
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get: if isOwner(uid) || isMember(roomId);
+        allow list: if isMember(roomId);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['uid', 'displayName', 'avatar', 'isReady', 'joinedAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.displayName == get(userPath(uid)).data.displayName
+          && (
+            // host bootstrap: created in the same batch as the room itself
+            (!exists(roomPath(roomId)) && getAfter(roomPath(roomId)).data.hostUid == uid && request.resource.data.isReady == true)
+            // normal join: lobby only, and the room's member count must go up by exactly one within capacity
+            || (exists(roomPath(roomId)) && get(roomPath(roomId)).data.status == 'WAITING'
+                && request.resource.data.isReady == false
+                && getAfter(roomPath(roomId)).data.memberCount == get(roomPath(roomId)).data.memberCount + 1
+                && getAfter(roomPath(roomId)).data.memberCount <= get(roomPath(roomId)).data.settings.maxPlayers)
+          );
+        allow update: if (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isReady'])
+            && request.resource.data.isReady is bool
+            && ((isOwner(uid) && get(roomPath(roomId)).data.status == 'WAITING') || isHost(roomId))
+          )
+          // Presence heartbeat (replaces the Realtime Database): only your own lastSeen, server time only.
+          || (
+            isOwner(uid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen'])
+            && request.resource.data.lastSeen == request.time
+          );
+        allow delete: if isOwner(uid) || isHost(roomId);   // leave, or host removes a player
+      }
+
+      // Role + secret word: only the owner can read it; only the host can write it.
+      match /privateRoles/{uid} {
+        allow read: if isOwner(uid) && isMember(roomId);
+        allow write: if isHost(roomId);
+      }
+
+      // Real words, custom words and the role map: host only.
+      match /secrets/{doc} {
+        allow read, write: if isHost(roomId);
+      }
+
+      match /rounds/{roundId} {
+        allow read: if isMember(roomId);
+        allow write: if isHost(roomId);
+
+        match /clues/{uid} {
+          allow read: if isMember(roomId);
+          allow create: if signedIn()
+            && request.resource.data.keys().hasOnly(['uid', 'clue', 'skipped', 'order', 'submittedAt'])
+            && request.resource.data.uid == uid
+            && request.resource.data.submittedAt == request.time
+            && (
+              (isHost(roomId) && request.resource.data.skipped == true)
+              || (isOwner(uid) && isMember(roomId) && request.resource.data.skipped == false
+                  && request.resource.data.clue is string
+                  && request.resource.data.clue.size() >= 1 && request.resource.data.clue.size() <= 40
+                  && get(roundPath(roomId, roundId)).data.phase == 'CLUE'
+                  && get(roundPath(roomId, roundId)).data.turnOrder[get(roundPath(roomId, roundId)).data.currentTurnIndex] == uid
+                  && request.resource.data.order == get(roundPath(roomId, roundId)).data.currentTurnIndex
+                  && request.resource.data.clue.lower() != get(rolePath(roomId, uid)).data.secretWord.lower())
+            );
+          allow update, delete: if false;
+        }
+
+        // Individual votes: only the voter and the host can read them. One per player per attempt.
+        match /votes/{voteId} {
+          allow read: if isHost(roomId) || (signedIn() && resource.data.uid == request.auth.uid);
+          allow create: if isOwner(request.resource.data.uid) && isMember(roomId)
+            && request.resource.data.keys().hasOnly(['uid', 'targetUid', 'attempt', 'submittedAt'])
+            && request.resource.data.submittedAt == request.time
+            && get(roundPath(roomId, roundId)).data.phase == 'VOTING'
+            && request.resource.data.attempt == get(roundPath(roomId, roundId)).data.voteAttempt
+            && voteId == ((request.resource.data.attempt == 1 ? 'a1_' : 'a2_') + request.auth.uid)
+            && request.resource.data.targetUid != request.auth.uid
+            && request.resource.data.targetUid in get(roundPath(roomId, roundId)).data.voteCandidates
+            && request.auth.uid in get(roundPath(roomId, roundId)).data.alive
+            && !(request.auth.uid in get(roundPath(roomId, roundId)).data.left);
+          allow update, delete: if false;
+        }
+
+        match /acks/{uid} {
+          allow read: if isMember(roomId);
+          allow create: if isOwner(uid) && isMember(roomId) && request.resource.data.uid == uid
+            && get(roundPath(roomId, roundId)).data.phase == 'ROLE_REVEAL';
+          allow update, delete: if false;
+        }
+      }
+    }
+
+    // Lets a signed-in user find their own memberships (used when deleting an account).
+    match /{path=**}/members/{m} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
