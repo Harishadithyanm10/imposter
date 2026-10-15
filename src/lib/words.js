@@ -284,4 +284,8 @@ export function pickWords({ category = 'RANDOM', difficulty = 'ANY', recent = []
   }
   const [word, hint, diff] = chosen.p;
   return { id: chosen.id, word, hint, imposterWord: hint, category: chosen.c, categoryLabel: labels[chosen.c] || chosen.c, difficulty: diff };
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 9763220333f653b5cdad5dca082e5a4a10e74b6f
