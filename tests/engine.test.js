@@ -31,6 +31,47 @@ test('no votes eliminates nobody', () => {
   assert.equal(r.needRevote, false);
 });
 
+test('multi-vote: voters back several players and tallyVotes counts each once', () => {
+  const t = e.tallyVotes([{ targetUids: ['a', 'b'] }, { targetUids: ['a', 'c'] }, { targetUids: ['a', 'a'] }, { targetUid: 'c' }], ['a', 'b', 'c', 'd']);
+  assert.deepEqual(t.counts, { a: 3, b: 1, c: 2, d: 0 });
+});
+
+test('resolveVotes eliminates the top N, never zero-vote players', () => {
+  const tally = (counts) => ({ counts });
+  // 3 imposters, clear top three
+  assert.deepEqual(e.resolveVotes(tally({ a: 5, b: 4, c: 3, d: 1, f: 0 }), { slots: 3, attempt: 1 }).eliminated.sort(), ['a', 'b', 'c']);
+  // fewer than N players received votes: only those are eliminated
+  assert.deepEqual(e.resolveVotes(tally({ a: 2, b: 0, c: 0 }), { slots: 3, attempt: 1 }).eliminated, ['a']);
+  // nobody voted
+  assert.deepEqual(e.resolveVotes(tally({ a: 0, b: 0 }), { slots: 2, attempt: 1 }).eliminated, []);
+});
+
+test('resolveVotes: a tie for the last slot gets one revote, then spares the tied players', () => {
+  const first = e.resolveVotes({ counts: { a: 5, b: 3, c: 3, d: 1 } }, { slots: 2, attempt: 1 });
+  assert.equal(first.needRevote, true);
+  assert.deepEqual(first.revoteCandidates.sort(), ['b', 'c']);
+  assert.equal(first.revoteSlots, 1);
+  assert.deepEqual(first.sure, ['a']);
+  const second = e.resolveVotes({ counts: { b: 2, c: 2 } }, { slots: 1, attempt: 2, sure: first.sure });
+  assert.equal(second.needRevote, false);
+  assert.deepEqual(second.eliminated, ['a']); // tied players are spared, the clear one still goes
+  assert.equal(second.tie, true);
+  const decided = e.resolveVotes({ counts: { b: 3, c: 1 } }, { slots: 1, attempt: 2, sure: first.sure });
+  assert.deepEqual(decided.eliminated.sort(), ['a', 'b']);
+});
+
+test('single imposter keeps the classic one-vote behaviour', () => {
+  assert.deepEqual(e.resolveVotes({ counts: { a: 2, b: 1 } }, { slots: 1, attempt: 1 }).eliminated, ['a']);
+  const tie = e.resolveVotes({ counts: { a: 1, b: 1, c: 0 } }, { slots: 1, attempt: 1 });
+  assert.equal(tie.needRevote, true);
+});
+
+test('round rules: any imposter caught = crew wins; escaping every sub-round = imposters win', () => {
+  assert.equal(e.evaluateWin({ imposters: 2, normals: 5, cycle: 1, maxCycles: 3, caught: 1 }).winner, 'NORMAL');
+  assert.equal(e.evaluateWin({ imposters: 3, normals: 6, cycle: 2, maxCycles: 3, caught: 0 }), null);
+  assert.equal(e.evaluateWin({ imposters: 3, normals: 6, cycle: 3, maxCycles: 3, caught: 0 }).winner, 'IMPOSTER');
+});
+
 test('victory conditions', () => {
   assert.equal(e.evaluateWin({ imposters: 0, normals: 3, cycle: 1, maxCycles: 3 }).winner, 'NORMAL');
   assert.equal(e.evaluateWin({ imposters: 2, normals: 2, cycle: 1, maxCycles: 3 }).winner, 'IMPOSTER');
@@ -60,10 +101,12 @@ test('clue cannot contain own secret word', () => {
 
 test('word bank: clue never contains the word, many topics, recent words avoided, topics rotate', () => {
   assert.ok(Object.keys(BANK).length >= 12);
-  for (const entries of Object.values(BANK)) for (const [word, hint] of entries) assert.equal(hint.toLowerCase().includes(word.toLowerCase()), false, `${word} / ${hint}`);
+  for (const entries of Object.values(BANK)) for (const [word, hint] of entries) { assert.equal(hint.toLowerCase().includes(word.toLowerCase()), false, `${word} / ${hint}`); assert.ok(hint.trim().split(/\s+/).length <= 2, `hint too long: ${hint}`); }
+  assert.equal(Object.values(BANK).flat().length, 500);
   const tea = pickWords({ category: 'FOOD', recent: BANK.FOOD.map((_, i) => `FOOD:${i}`).filter((id) => id !== 'FOOD:0') });
   assert.equal(tea.word, 'Tea');
-  assert.equal(tea.hint, 'A hot drink made from leaves');
+  assert.equal(tea.hint, BANK.FOOD[0][1]);
+  assert.equal(tea.hint, 'Steeped');
   assert.equal(tea.imposterWord, tea.hint); // imposter gets a clue about Tea, never Coffee
   let prev = null;
   for (let i = 0; i < 60; i += 1) { const r = pickWords({ category: 'RANDOM', recent: prev ? [prev.id] : [] }); if (prev) assert.notEqual(r.category, prev.category); prev = r; }

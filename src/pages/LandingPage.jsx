@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion';
-import { Eye, Lock, MessageSquare, Radio, Users, Vote, Zap } from 'lucide-react';
+import { Eye, Lock, MessageSquare, Radio, Smartphone, Users, Vote, Zap } from 'lucide-react';
 import Logo from '../components/common/Logo.jsx';
 import Button from '../components/common/Button.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
 const STEPS = [
-  { Icon: Eye, title: 'Get your secret', text: 'Everyone sees the same word, except the imposter, who gets a different one or only a vague clue.' },
+  { Icon: Eye, title: 'Get your secret', text: 'Everyone sees the same word, except the imposter, who only gets a vague clue about it.' },
   { Icon: MessageSquare, title: 'Give one clue each', text: 'Take turns with a short clue that proves you know the word without giving it away.' },
   { Icon: Users, title: 'Talk it out', text: 'Compare clues in person or on a call. Someone is bluffing.' },
   { Icon: Vote, title: 'Vote them out', text: 'Everyone votes in secret. Find all the imposters before they outnumber you.' },
@@ -23,7 +23,8 @@ export default function LandingPage() {
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Logo />
-        <nav className="flex items-center gap-2" aria-label="Account">
+        <nav className="flex items-center gap-1 sm:gap-2" aria-label="Account">
+          <Button to="/how-to-play" variant="ghost" size="sm">How to play</Button>
           {authed ? <Button to="/dashboard" size="sm">Play Now</Button> : (
             <>
               <Button to="/login" variant="ghost" size="sm">Login</Button>
@@ -52,6 +53,7 @@ export default function LandingPage() {
               <Button to="/login" variant="secondary" size="lg">Login</Button>
             </>
           )}
+          <Button to="/pass-and-play" variant="secondary" size="lg"><Smartphone className="h-5 w-5" aria-hidden />Play on one phone</Button>
         </div>
       </section>
 
@@ -67,7 +69,7 @@ export default function LandingPage() {
           ))}
         </ol>
         <p className="mt-6 rounded-2xl bg-ink-900/80 p-4 text-sm text-ink-300 ring-1 ring-ink-700">
-          Example: the crew all hold <strong className="text-ink-100">Coffee</strong>. The imposter holds <strong className="text-hot-400">Tea</strong>. Their clue has to sound right without knowing why.
+          Example: the crew all hold <strong className="text-ink-100">Tea</strong>. The imposter only sees the topic (Food &amp; drink) and a two-word clue like <strong className="text-hot-400">Steeped</strong>. They have to bluff the rest.
         </p>
       </section>
 

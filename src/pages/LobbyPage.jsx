@@ -85,7 +85,7 @@ export default function LobbyPage() {
         <Card>
           <h2 className="mb-3 text-lg font-bold">Settings</h2>
           <dl className="space-y-1.5 text-sm">
-            {[['Mode', labelOf(GAME_MODES, s.gameMode)], ['Imposters', s.imposters], ['Rounds', s.rounds],
+            {[['Mode', labelOf(GAME_MODES, s.gameMode)], ['Imposters', s.imposters], ['Rounds', s.rounds], ['Sub-rounds', s.subRounds ?? 3],
               ['Clues', s.typedClues ? 'Typed' : 'Timer only (spoken)'], ['Time per player', `${s.clueTimer}s`], ['Discussion', `${s.discussionTimer}s`], ['Voting', `${s.votingTimer}s`],
               ...(s.gameMode === 'CUSTOM' ? [['Words', 'Custom (hidden)']] : [['Category', labelOf(CATEGORIES, s.category)], ['Difficulty', labelOf(DIFFICULTIES, s.difficulty)]])]
               .map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-ink-400">{k}</dt><dd className="font-semibold">{v}</dd></div>)}

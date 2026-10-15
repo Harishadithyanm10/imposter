@@ -5,11 +5,16 @@
 // Imposters must stay a strict minority; hard cap of 10 (matches firestore.rules).
 const maxImposters = (n) => Math.min(10, Math.max(1, Math.floor((n - 1) / 2)));
 
+/** Each vote may name several targets (`targetUids`, one per imposter) or a single legacy `targetUid`. */
 function tallyVotes(votes, candidates) {
   const counts = {};
   for (const c of candidates) counts[c] = 0;
   for (const v of votes) {
-    if (v && Object.prototype.hasOwnProperty.call(counts, v.targetUid)) counts[v.targetUid] += 1;
+    if (!v) continue;
+    const targets = Array.isArray(v.targetUids) ? v.targetUids : v.targetUid ? [v.targetUid] : [];
+    for (const t of new Set(targets)) { // a voter can only back each player once
+      if (Object.prototype.hasOwnProperty.call(counts, t)) counts[t] += 1;
+    }
   }
   const max = Math.max(0, ...Object.values(counts));
   const leaders = max > 0 ? candidates.filter((c) => counts[c] === max) : [];
@@ -25,13 +30,50 @@ function resolveTally(tally, attempt) {
   return { eliminated: null, tie: true, needRevote: false, leaders };
 }
 
-function evaluateWin({ imposters, normals, cycle, maxCycles }) {
+/**
+ * Multi-vote elimination. Every voter backs `slots` players (one per imposter); the `slots`
+ * players with the most votes are eliminated. Players with zero votes are never eliminated.
+ * If several players are tied for the LAST open slot(s), those tied players get ONE revote
+ * (each voter picks `revoteSlots` of them); players who were already clearly out stay out.
+ * If the revote is still tied, only the players who were clearly out are eliminated.
+ * With slots = 1 this behaves exactly like a normal single-vote tie-break.
+ *
+ * @param {{counts:Object<string,number>}} tally from tallyVotes
+ * @param {{slots:number, attempt:number, sure?:string[]}} opts `sure` = already-decided eliminations from attempt 1
+ */
+function resolveVotes(tally, { slots, attempt, sure = [] }) {
+  const ranked = Object.entries(tally.counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const base = { tie: false, needRevote: false, revoteCandidates: [], revoteSlots: 0, sure: [] };
+  if (!ranked.length) return { ...base, eliminated: [...sure] };
+  if (ranked.length <= slots) return { ...base, eliminated: [...sure, ...ranked.map(([u]) => u)] };
+  const cutoff = ranked[slots - 1][1];
+  const clear = ranked.filter(([, n]) => n > cutoff).map(([u]) => u);
+  const edge = ranked.filter(([, n]) => n === cutoff).map(([u]) => u);
+  const needed = slots - clear.length;
+  if (edge.length <= needed) return { ...base, eliminated: [...sure, ...clear, ...edge] };
+  if (attempt === 1) {
+    return { ...base, eliminated: [], tie: true, needRevote: true, revoteCandidates: edge, revoteSlots: needed, sure: [...sure, ...clear] };
+  }
+  return { ...base, eliminated: [...sure, ...clear], tie: true };
+}
+
+/**
+ * Round rules (one word = one round, split into sub-rounds):
+ *  - If any imposter is caught in a sub-round, the crew wins the round.
+ *  - If the imposters match or outnumber the remaining players, the imposters win the round.
+ *  - If the imposters escape the LAST sub-round (cycle >= maxCycles), the imposters win the round.
+ *  - Otherwise play the next sub-round.
+ */
+function evaluateWin({ imposters, normals, cycle, maxCycles, caught = 0 }) {
+  if (caught > 0) {
+    return { winner: 'NORMAL', reason: `${caught > 1 ? `${caught} imposters were` : 'An imposter was'} caught in sub-round ${cycle}. The crew wins this round.` };
+  }
   if (imposters <= 0) return { winner: 'NORMAL', reason: 'All imposters were eliminated.' };
   if (imposters >= normals) {
     return { winner: 'IMPOSTER', reason: 'The imposters now match or outnumber the remaining players.' };
   }
   if (cycle >= maxCycles) {
-    return { winner: 'IMPOSTER', reason: 'The round limit was reached and an imposter is still hiding.' };
+    return { winner: 'IMPOSTER', reason: `The imposters escaped all ${maxCycles} sub-round${maxCycles === 1 ? '' : 's'}.` };
   }
   return null;
 }
@@ -67,4 +109,4 @@ function clueLeaksWord(clue, secretWord) {
   return c.includes(` ${norm(secretWord)} `);
 }
 
-export { maxImposters, tallyVotes, resolveTally, evaluateWin, countSides, pickNewHost, allVoted, clueLeaksWord };
+export { maxImposters, tallyVotes, resolveTally, resolveVotes, evaluateWin, countSides, pickNewHost, allVoted, clueLeaksWord };

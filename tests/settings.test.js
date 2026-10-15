@@ -52,3 +52,10 @@ test('typedClues defaults to timer-only and only true enables typing', () => {
   assert.equal(v.validateSettings({ ...base, typedClues: true }).settings.typedClues, true);
   assert.equal(v.validateSettings({ ...base, typedClues: 'yes' }).settings.typedClues, false);
 });
+
+test('subRounds defaults to 3 and must be 1-5', () => {
+  assert.equal(v.validateSettings(base).settings.subRounds, 3);
+  assert.equal(v.validateSettings({ ...base, subRounds: 5 }).settings.subRounds, 5);
+  assert.throws(() => v.validateSettings({ ...base, subRounds: 6 }));
+  assert.throws(() => v.validateSettings({ ...base, subRounds: 0 }));
+});

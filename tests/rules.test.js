@@ -28,7 +28,7 @@ beforeEach(async () => {
     await setDoc(doc(db, `rooms/${ROOM}/members/bob`), { uid: 'bob', displayName: 'bob', isReady: false });
     await setDoc(doc(db, `rooms/${ROOM}/privateRoles/alice`), { uid: 'alice', role: 'IMPOSTER', secretWord: 'Tea', matchId: 'm1' });
     await setDoc(doc(db, `rooms/${ROOM}/privateRoles/bob`), { uid: 'bob', role: 'NORMAL', secretWord: 'Coffee', matchId: 'm1' });
-    await setDoc(doc(db, `rooms/${ROOM}/rounds/r1`), { matchId: 'm1', phase: 'CLUE', turnOrder: ['bob', 'alice'], currentTurnIndex: 0, alive: ['alice', 'bob'], left: [], voteAttempt: 1, voteCandidates: ['alice', 'bob'], result: null });
+    await setDoc(doc(db, `rooms/${ROOM}/rounds/r1`), { matchId: 'm1', phase: 'CLUE', turnOrder: ['bob', 'alice'], currentTurnIndex: 0, alive: ['alice', 'bob'], left: [], voteAttempt: 1, voteCandidates: ['alice', 'bob'], voteSlots: 1, result: null });
     await setDoc(doc(db, `rooms/${ROOM}/secrets/m1`), { word: 'Coffee', roles: { alice: 'IMPOSTER', bob: 'NORMAL' } });
     await setDoc(doc(db, 'roomCodes/ABC234'), { roomId: ROOM, hostUid: 'alice' });
     await setDoc(doc(db, 'usernames/alice'), { uid: 'alice' });
@@ -110,10 +110,11 @@ test('clues: only the player whose turn it is, once, without their own word', as
 });
 
 test('votes: voter-only reads, one per attempt, no self vote, only in voting', async () => {
-  const vote = (uid, target, attempt = 1) => ({ uid, targetUid: target, attempt, submittedAt: serverTimestamp() });
+  const vote = (uid, target, attempt = 1) => ({ uid, targetUids: Array.isArray(target) ? target : [target], attempt, submittedAt: serverTimestamp() });
   await assertFails(setDoc(doc(as('bob'), `rooms/${ROOM}/rounds/r1/votes/a1_bob`), vote('bob', 'alice'))); // phase is CLUE
   await admin((a) => updateDoc(doc(a, `rooms/${ROOM}/rounds/r1`), { phase: 'VOTING' }));
   await assertFails(setDoc(doc(as('bob'), `rooms/${ROOM}/rounds/r1/votes/a1_bob`), vote('bob', 'bob'))); // self
+  await assertFails(setDoc(doc(as('bob'), `rooms/${ROOM}/rounds/r1/votes/a1_bob`), vote('bob', ['alice', 'alice']))); // more picks than imposters / duplicates
   await assertSucceeds(setDoc(doc(as('bob'), `rooms/${ROOM}/rounds/r1/votes/a1_bob`), vote('bob', 'alice')));
   await assertFails(setDoc(doc(as('bob'), `rooms/${ROOM}/rounds/r1/votes/a1_bob`), vote('bob', 'alice'))); // duplicate
   await assertSucceeds(getDoc(doc(as('bob'), `rooms/${ROOM}/rounds/r1/votes/a1_bob`)));
@@ -168,4 +169,17 @@ test('presence heartbeat: only your own lastSeen, server time only', async () =>
   await assertFails(updateDoc(doc(as('bob'), `rooms/${ROOM}/members/alice`), { lastSeen: serverTimestamp() }));
   await assertFails(updateDoc(doc(as('bob'), `rooms/${ROOM}/members/bob`), { lastSeen: Timestamp.fromMillis(1) }));
   await assertFails(updateDoc(doc(as('bob'), `rooms/${ROOM}/members/bob`), { lastSeen: serverTimestamp(), isReady: true }));
+});
+
+test('leaderboard: public to read, but your entry can only mirror your real stats', async () => {
+  const entry = (over = {}) => ({ uid: 'bob', displayName: 'bob', avatar: 'violet', gamesPlayed: 0, gamesWon: 0, ...over });
+  await assertSucceeds(setDoc(doc(as('bob'), 'leaderboard/bob'), entry()));
+  await assertFails(setDoc(doc(as('bob'), 'leaderboard/bob'), entry({ gamesPlayed: 50, gamesWon: 50 }))); // faked score
+  await assertFails(setDoc(doc(as('bob'), 'leaderboard/bob'), entry({ displayName: 'someone-else' })));
+  await assertFails(setDoc(doc(as('alice'), 'leaderboard/bob'), entry())); // someone else's entry
+  await assertSucceeds(getDoc(doc(as('carol'), 'leaderboard/bob')));
+  await assertSucceeds(getDocs(collection(as('carol'), 'leaderboard')));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'leaderboard/bob')));
+  await assertSucceeds(setDoc(doc(as('bob'), 'leaderboard/bob'), entry())); // idempotent resync
+  await assertSucceeds(updateDoc(doc(as('bob'), 'leaderboard/bob'), { gamesWon: 0 }));
 });

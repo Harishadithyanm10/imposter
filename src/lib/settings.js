@@ -80,7 +80,8 @@ function validateSettings(input, { memberCount = 1, existingHasCustom = false } 
     roomName: cleanText(input.roomName, 'Room name', 3, 30),
     maxPlayers,
     imposters,
-    rounds: int(input.rounds, 'Rounds', 1, 10),
+    rounds: int(input.rounds, 'Rounds', 1, 10), // rounds = words per game
+    subRounds: int(input.subRounds ?? 3, 'Sub-rounds', 1, 5), // chances to catch the imposter per word
     clueTimer: int(input.clueTimer, 'Clue timer', 15, 120),
     discussionTimer: int(input.discussionTimer, 'Discussion timer', 30, 600),
     votingTimer: int(input.votingTimer, 'Voting timer', 15, 180),

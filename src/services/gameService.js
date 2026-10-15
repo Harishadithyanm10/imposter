@@ -27,10 +27,13 @@ export async function markSpoke(roomId, roundId, uid, turnIndex) {
   } catch (e) { denied(e, 'It is not your turn, or your turn just ended.'); }
 }
 
-export async function submitVote(roomId, roundId, uid, attempt, targetUid) {
+/** One vote document per player per attempt, naming one player for each imposter in the game. */
+export async function submitVote(roomId, roundId, uid, attempt, targetUids) {
+  const picks = [...new Set(Array.isArray(targetUids) ? targetUids : [targetUids])];
+  if (!picks.length) throw new Error('Pick at least one player.');
   try {
     await setDoc(doc(db, 'rooms', roomId, 'rounds', roundId, 'votes', `a${attempt}_${uid}`), {
-      uid, targetUid, attempt, submittedAt: serverTimestamp(),
+      uid, targetUids: picks, attempt, submittedAt: serverTimestamp(),
     });
   } catch (e) { denied(e, 'Your vote was not accepted. You may have already voted, or voting just closed.'); }
 }

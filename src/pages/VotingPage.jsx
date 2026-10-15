@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Vote } from 'lucide-react';
 import Avatar from '../components/common/Avatar.jsx';
@@ -13,30 +13,49 @@ import { cx } from '../utils/cx.js';
 
 export default function VotingPage() {
   const { roomId, room, round, uid, alive, isAlive, playerOf } = useRoom();
-  const [target, setTarget] = useState(null);
+  const [picks, setPicks] = useState([]);
   const [run, busy] = useAsyncAction();
   const [votedAttempt, setVotedAttempt] = useState(null);
   const hasVoted = round.voted.includes(uid) || votedAttempt === round.voteAttempt;
   const candidates = round.voteCandidates.filter((u) => u !== uid && !round.left.includes(u));
+  const slots = Math.max(1, Math.min(round.voteSlots || 1, candidates.length)); // one pick per imposter
   const canVote = isAlive && !hasVoted;
+  const revote = round.voteAttempt === 2;
+
+  // a new sub-round or a revote starts with a clean selection
+  useEffect(() => { setPicks([]); }, [round.id, round.voteAttempt]);
+
+  const toggle = (u) => setPicks((cur) => {
+    if (cur.includes(u)) return cur.filter((x) => x !== u);
+    return cur.length >= slots ? [...cur.slice(1), u] : [...cur, u]; // when full, the oldest pick is replaced
+  });
+
+  const subtitle = revote
+    ? `Tie for the last ${slots > 1 ? 'spots' : 'spot'}. Pick ${slots} of the tied players.`
+    : slots > 1 ? `There are ${slots} imposters. Pick ${slots} different players.` : 'Who is the imposter? Votes stay secret until everyone has voted.';
 
   return (
     <div>
-      <PhaseHeader title={round.voteAttempt === 2 ? 'Revote' : 'Vote'} total={room.settings.votingTimer}
-        subtitle={round.voteAttempt === 2 ? 'It was a tie. Vote again between the tied players.' : 'Who is the imposter? Votes stay secret until everyone has voted.'} />
+      <PhaseHeader title={revote ? 'Revote' : 'Vote'} total={room.settings.votingTimer} subtitle={subtitle} />
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem] lg:gap-6">
         <section>
+          {canVote && (
+            <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-300">
+              <span className="font-semibold text-ink-100">Your picks {picks.length}/{slots}</span>
+              {picks.map((u) => <span key={u} className="max-w-[9rem] truncate rounded-full bg-hot-600/15 px-2.5 py-1 text-xs font-semibold text-hot-400 ring-1 ring-hot-500/40">{playerOf(u).displayName}</span>)}
+            </p>
+          )}
           <ul className="grid gap-2.5 sm:grid-cols-2 sm:gap-3" aria-label="Players to vote for">
             {candidates.map((u) => {
-              const p = playerOf(u); const selected = target === u;
+              const p = playerOf(u); const selected = picks.includes(u);
               return (
                 <li key={u}>
-                  <motion.button whileTap={{ scale: 0.97 }} disabled={!canVote} onClick={() => setTarget(u)} aria-pressed={selected}
-                    className={cx('flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60',
+                  <motion.button whileTap={{ scale: 0.97 }} disabled={!canVote} onClick={() => toggle(u)} aria-pressed={selected}
+                    className={cx('flex min-h-14 w-full items-center gap-3 rounded-2xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 sm:p-4',
                       selected ? 'border-hot-500 bg-hot-600/15 ring-2 ring-hot-500/40' : 'border-ink-700 bg-ink-900 hover:border-ink-500')}>
                     <Avatar name={p.displayName} avatar={p.avatar} />
                     <span className="min-w-0 flex-1 truncate font-semibold">{p.displayName}</span>
-                    {selected && <Check className="h-5 w-5 text-hot-400" aria-hidden />}
+                    {selected && <Check className="h-5 w-5 shrink-0 text-hot-400" aria-hidden />}
                   </motion.button>
                 </li>
               );
@@ -45,7 +64,10 @@ export default function VotingPage() {
           <div className="sticky bottom-3 z-10 mt-5 rounded-2xl bg-ink-950/80 p-1 backdrop-blur sm:static sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
             {hasVoted ? <p role="status" className="rounded-2xl bg-emerald-500/10 p-4 text-emerald-200 ring-1 ring-emerald-500/30">Vote locked in. Waiting for the others…</p>
               : !isAlive ? <p className="rounded-2xl bg-ink-800 p-4 text-ink-300">You were voted out, so you cannot vote. Watch how it ends.</p>
-              : <Button size="lg" className="w-full sm:w-auto" disabled={!target} loading={busy} onClick={async () => { const out = await run(() => submitVote(roomId, round.id, uid, round.voteAttempt, target)); if (out.ok) setVotedAttempt(round.voteAttempt); }}><Vote className="h-5 w-5" />Lock in vote</Button>}
+              : <Button size="lg" className="w-full sm:w-auto" disabled={picks.length !== slots} loading={busy}
+                  onClick={async () => { const out = await run(() => submitVote(roomId, round.id, uid, round.voteAttempt, picks)); if (out.ok) setVotedAttempt(round.voteAttempt); }}>
+                  <Vote className="h-5 w-5" aria-hidden />{picks.length === slots ? `Lock in ${slots > 1 ? `${slots} votes` : 'vote'}` : `Pick ${slots - picks.length} more`}
+                </Button>}
           </div>
         </section>
         <aside className="space-y-4">

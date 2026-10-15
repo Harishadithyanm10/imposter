@@ -74,6 +74,20 @@ service cloud.firestore {
       }
     }
 
+    // All-time leaderboard: any signed-in player can read it. Your own entry can only ever mirror your
+    // stats, which are themselves only changeable together with a verified history record (see users).
+    match /leaderboard/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'avatar', 'gamesPlayed', 'gamesWon'])
+        && request.resource.data.uid == uid
+        && request.resource.data.displayName == getAfter(userPath(uid)).data.displayName
+        && request.resource.data.avatar == getAfter(userPath(uid)).data.avatar
+        && request.resource.data.gamesPlayed == getAfter(userPath(uid)).data.gamesPlayed
+        && request.resource.data.gamesWon == getAfter(userPath(uid)).data.gamesWon;
+      allow delete: if isOwner(uid);
+    }
+
     // Unique display names. Anyone may check one name (needed at sign-up); nobody can list them.
     match /usernames/{name} {
       allow get: if true;
@@ -124,6 +138,13 @@ service cloud.firestore {
       return isMember(roomId) && d.diff(o).affectedKeys().hasOnly(['hostUid', 'hostDisconnectedAt'])
         && d.hostUid == request.auth.uid && ('hostDisconnectedAt' in o) && !('hostDisconnectedAt' in d)
         && request.time > o.hostDisconnectedAt + duration.value(30, 's');
+    }
+
+    // Editable word bank. Signed-in players can read it (the host's browser picks the words);
+    // nobody can write from the app. Edit it in the Firebase console or with scripts/seedWords.mjs.
+    match /words/{wordId} {
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     match /rooms/{roomId} {
@@ -209,13 +230,18 @@ service cloud.firestore {
         match /votes/{voteId} {
           allow read: if isHost(roomId) || (signedIn() && resource.data.uid == request.auth.uid);
           allow create: if isOwner(request.resource.data.uid) && isMember(roomId)
-            && request.resource.data.keys().hasOnly(['uid', 'targetUid', 'attempt', 'submittedAt'])
+            && request.resource.data.keys().hasOnly(['uid', 'targetUids', 'attempt', 'submittedAt'])
             && request.resource.data.submittedAt == request.time
             && get(roundPath(roomId, roundId)).data.phase == 'VOTING'
             && request.resource.data.attempt == get(roundPath(roomId, roundId)).data.voteAttempt
             && voteId == ((request.resource.data.attempt == 1 ? 'a1_' : 'a2_') + request.auth.uid)
-            && request.resource.data.targetUid != request.auth.uid
-            && request.resource.data.targetUid in get(roundPath(roomId, roundId)).data.voteCandidates
+            // one pick per imposter: 1..voteSlots distinct players, never yourself, only valid candidates
+            && request.resource.data.targetUids is list
+            && request.resource.data.targetUids.size() >= 1
+            && request.resource.data.targetUids.size() <= get(roundPath(roomId, roundId)).data.voteSlots
+            && request.resource.data.targetUids.toSet().size() == request.resource.data.targetUids.size()
+            && !(request.auth.uid in request.resource.data.targetUids)
+            && request.resource.data.targetUids.hasOnly(get(roundPath(roomId, roundId)).data.voteCandidates)
             && request.auth.uid in get(roundPath(roomId, roundId)).data.alive
             && !(request.auth.uid in get(roundPath(roomId, roundId)).data.left);
           allow update, delete: if false;

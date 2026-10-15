@@ -8,6 +8,7 @@ import { auth, db } from './firebase.js';
 import { AVATAR_KEYS } from '../constants/avatars.js';
 import { validateDisplayName } from '../lib/settings.js';
 import { randomInt } from '../lib/random.js';
+import { leaderboardEntry } from './leaderboardService.js';
 
 const nameKey = (n) => n.toLowerCase();
 
@@ -31,12 +32,15 @@ export async function createProfile(uid, { displayName, fullName = '', email = '
   await runTransaction(db, async (tx) => {
     const nameRef = doc(db, 'usernames', lower);
     if ((await tx.get(nameRef)).exists()) throw takenError();
+    const pickedAvatar = avatar || AVATAR_KEYS[randomInt(AVATAR_KEYS.length)];
     tx.set(nameRef, { uid });
     tx.set(doc(db, 'users', uid), {
       uid, displayName, displayNameLower: lower, fullName, email, photoURL,
-      avatar: avatar || AVATAR_KEYS[randomInt(AVATAR_KEYS.length)],
+      avatar: pickedAvatar,
       createdAt: serverTimestamp(), gamesPlayed: 0, gamesWon: 0,
     });
+    // every player is on the all-time leaderboard from day one (0 wins)
+    tx.set(doc(db, 'leaderboard', uid), leaderboardEntry(uid, { displayName, avatar: pickedAvatar, gamesPlayed: 0, gamesWon: 0 }));
   });
 }
 

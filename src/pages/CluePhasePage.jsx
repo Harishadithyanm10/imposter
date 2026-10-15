@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Check, Mic, SkipForward } from 'lucide-react';
 import Avatar from '../components/common/Avatar.jsx';
 import Button from '../components/common/Button.jsx';
@@ -37,16 +36,17 @@ export default function CluePhasePage() {
   const subtitle = myTurn ? (typed ? 'Your turn. Give one short clue.' : 'Your turn. Say a clue out loud.') : `${current.displayName} is ${typed ? 'thinking…' : 'speaking…'}`;
 
   return (
-    <div>
+    <div className="min-w-0 overflow-x-clip">
       <PhaseHeader title="Clue time" subtitle={subtitle} total={room.settings.clueTimer} />
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem] lg:gap-6">
         <section className="order-2 space-y-4 lg:order-1">
           {myTurn && (
-            <motion.div initial={{ scale: 0.98 }} animate={{ scale: 1 }}>
+            <div className="scroll-mt-28">
               <Card className="border-brand-500/50 ring-2 ring-brand-500/20">
                 {typed ? (
                   <form onSubmit={send} noValidate className="space-y-3">
-                    <Input label="Your clue" value={clue} maxLength={40} autoFocus autoComplete="off" onChange={(e) => setClue(e.target.value)} error={error}
+                    <Input label="Your clue" value={clue} maxLength={40} autoComplete="off" autoCapitalize="none" enterKeyHint="send" onChange={(e) => setClue(e.target.value)} error={error}
+                      onFocus={(e) => { const el = e.target; setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300); }}
                       hint="Up to three words. Do not say your secret word." />
                     <Button type="submit" size="lg" loading={busy} className="w-full">Submit clue</Button>
                   </form>
@@ -59,7 +59,7 @@ export default function CluePhasePage() {
                   </div>
                 )}
               </Card>
-            </motion.div>
+            </div>
           )}
           <Card>
             <h2 className="mb-3 text-lg font-bold">Speaking order</h2>
@@ -68,14 +68,14 @@ export default function CluePhasePage() {
                 const p = playerOf(u); const done = byUid[u]; const active = i === round.currentTurnIndex;
                 const spoke = done && (done.clue === SPOKE_MARK || (!typed && done.skipped));
                 return (
-                  <li key={u} aria-current={active ? 'step' : undefined} className={cx('flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3', active ? 'bg-brand-600/20 ring-1 ring-brand-500/60' : 'bg-ink-800/60')}>
-                    <span className="w-5 shrink-0 text-center text-xs font-bold text-ink-400">{i + 1}</span>
+                  <li key={u} aria-current={active ? 'step' : undefined} className={cx('flex items-start gap-3 rounded-2xl px-3 py-2.5 sm:items-center sm:px-4 sm:py-3', active ? 'bg-brand-600/20 ring-1 ring-brand-500/60' : 'bg-ink-800/60')}>
+                    <span className="w-5 shrink-0 pt-2 text-center text-xs font-bold text-ink-400 sm:pt-0">{i + 1}</span>
                     <Avatar name={p.displayName} avatar={p.avatar} size="sm" />
                     <span className="min-w-0 flex-1 truncate font-semibold">{p.displayName}{u === uid && ' (you)'}</span>
-                    <span className="flex shrink-0 items-center gap-1.5 text-sm">
+                    <span className="flex min-w-0 max-w-[50%] shrink items-center justify-end gap-1.5 text-right text-sm">
                       {done ? (spoke ? <><Check className="h-4 w-4 text-emerald-400" aria-hidden /><span className="text-ink-300">done</span></>
                         : done.skipped ? <span className="italic text-ink-400">skipped</span>
-                        : <><Check className="h-4 w-4 text-emerald-400" aria-hidden /><span className="font-display text-base font-bold sm:text-lg">{done.clue}</span></>)
+                        : <><Check className="h-4 w-4 text-emerald-400" aria-hidden /><span className="min-w-0 break-words font-display text-base font-bold sm:text-lg">{done.clue}</span></>)
                         : active ? <span className="text-brand-300">{typed ? 'giving clue…' : 'speaking…'}</span> : <span className="text-ink-400">waiting</span>}
                     </span>
                   </li>

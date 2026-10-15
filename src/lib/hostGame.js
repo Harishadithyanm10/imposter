@@ -8,6 +8,7 @@ import * as engine from './engine.js';
 import { shuffle } from './random.js';
 import { pickWords } from './words.js';
 
+
 const REVEAL_MS = 30_000;
 const OFFLINE_SKIP_MS = 10_000;
 const GRACE_MS = 1500;
@@ -24,13 +25,13 @@ function cluePhaseFields({ alive, left }, settings, now) {
   const endsAt = ts(now + settings.clueTimer * 1000);
   return {
     phase: 'CLUE', turnOrder: shuffle(alive.filter((u) => !left.includes(u))), currentTurnIndex: 0,
-    turnStartedAt: ts(now), turnEndsAt: endsAt, phaseEndsAt: endsAt, voted: [], voteCandidates: [], voteAttempt: 1,
+    turnStartedAt: ts(now), turnEndsAt: endsAt, phaseEndsAt: endsAt, voted: [], voteCandidates: [], voteAttempt: 1, voteSlots: 1, pendingElim: [], firstCounts: null,
   };
 }
 
 function newRoundData({ matchId, cycle, alive, left = [], players, settings, phase, now }) {
   const base = {
-    matchId, cycle, phase, alive, left, players, voted: [], voteAttempt: 1, voteCandidates: [],
+    matchId, cycle, phase, alive, left, players, voted: [], voteAttempt: 1, voteCandidates: [], voteSlots: 1, pendingElim: [], firstCounts: null,
     turnOrder: [], currentTurnIndex: 0, result: null, createdAt: serverTimestamp(),
   };
   if (phase === 'ROLE_REVEAL') return { ...base, phaseEndsAt: ts(now + REVEAL_MS) };
@@ -38,7 +39,8 @@ function newRoundData({ matchId, cycle, alive, left = [], players, settings, pha
 }
 
 /** Deal a brand-new match (fresh roles and words). Runs inside a transaction, writes only. */
-function beginMatchTx(tx, { roomId, room, members, config, meta, now }) {
+// One call = one ROUND of the game (a fresh word and fresh roles). Each round has several sub-rounds.
+function beginMatchTx(tx, { roomId, room, members, config, meta, now, wordSource, gameRound = 1 }) {
   const { settings } = room;
   const uids = members.map((m) => m.id);
   const n = uids.length;
@@ -53,7 +55,7 @@ function beginMatchTx(tx, { roomId, room, members, config, meta, now }) {
     if (!config?.customWord) throw new Error('Custom words are missing. Set them in room settings.');
     word = config.customWord; hint = config.customImposterWord;
   } else {
-    const picked = pickWords({ category: settings.category, difficulty: settings.difficulty, recent: meta?.recent || [] });
+    const picked = pickWords({ category: settings.category, difficulty: settings.difficulty, recent: meta?.recent || [], source: wordSource });
     ({ word, hint, category } = picked); topic = picked.categoryLabel; wordId = picked.id;
   }
   const imposterWord = hint;
@@ -77,12 +79,14 @@ function beginMatchTx(tx, { roomId, room, members, config, meta, now }) {
   tx.update(rRef, {
     status: 'IN_GAME', currentPhase: 'ROLE_REVEAL', currentRoundId: roundRef.id, matchId, currentRound: 1,
     matchCount: (room.matchCount || 0) + 1, expiresAt: ts(now + ROOM_TTL_MS),
+    gameRound, ...(gameRound === 1 ? { scores: { crew: 0, imposters: 0 } } : {}),
   });
   if (wordId) tx.set(secretsRef(roomId, '_meta'), { recent: [...(meta?.recent || []), wordId].slice(-40) }, { merge: true });
 }
 
 /** Host presses Start Game in the lobby. */
 export async function startMatch(roomId, members) {
+  const wordSource = await loadWordBank(); // editable list from Firestore (null => built-in)
   await runTransaction(db, async (tx) => {
     const room = (await tx.get(roomRef(roomId))).data();
     if (!room || room.status !== 'WAITING') throw new Error('The game has already started.');
@@ -90,12 +94,13 @@ export async function startMatch(roomId, members) {
     const meta = (await tx.get(secretsRef(roomId, '_meta'))).data();
     if (members.length < 3) throw new Error('At least 3 players are needed.');
     if (members.some((m) => m.id !== room.hostUid && !m.isReady)) throw new Error('Every player must be ready first.');
-    beginMatchTx(tx, { roomId, room, members, config, meta, now: Date.now() });
+    beginMatchTx(tx, { roomId, room, members, config, meta, now: Date.now(), wordSource, gameRound: 1 });
   });
 }
 
 /** Host presses Next Round on the result screen. */
 export async function nextRound(roomId, members) {
+  const wordSource = await loadWordBank();
   await runTransaction(db, async (tx) => {
     const room = (await tx.get(roomRef(roomId))).data();
     if (!room || room.status !== 'IN_GAME') throw new Error('The game is not running.');
@@ -105,7 +110,9 @@ export async function nextRound(roomId, members) {
     const meta = (await tx.get(secretsRef(roomId, '_meta'))).data();
     const now = Date.now();
     if (round.result?.matchOver) {
-      beginMatchTx(tx, { roomId, room, members, config, meta, now }); // fresh roles + fresh words
+      const finished = room.gameRound || 1;
+      if (finished >= room.settings.rounds) throw new Error('All rounds are finished. Return to the lobby to play again.');
+      beginMatchTx(tx, { roomId, room, members, config, meta, now, wordSource, gameRound: finished + 1 }); // fresh roles + fresh word
       return;
     }
     const rRef = roomRef(roomId);
@@ -134,14 +141,19 @@ async function withRound(roomId, { phase, check, withSecrets = false }, fn) {
 }
 
 function finishMatchTx(tx, c, { alive, left, win, base }) {
-  const { secrets, round } = c;
+  const { secrets, round, room } = c;
+  const gameRound = room.gameRound || 1;
+  const prev = room.scores || { crew: 0, imposters: 0 };
+  const scores = { crew: prev.crew + (win.winner === 'NORMAL' ? 1 : 0), imposters: prev.imposters + (win.winner === 'IMPOSTER' ? 1 : 0) };
   const result = {
-    ...base, matchOver: true, winner: win.winner, reason: win.reason,
+    eliminated: [], eliminatedUid: null, eliminatedRole: null, caught: 0, counts: {}, revoteCounts: null, tie: false, attempt: 1,
+    ...base, matchOver: true, winner: win.winner, reason: win.reason, subRound: round.cycle,
+    gameRound, gameOver: gameRound >= room.settings.rounds, scores,
     imposters: secrets.imposters, word: secrets.word, mode: secrets.mode,
     imposterWord: secrets.hint || secrets.imposterWord,
   };
   tx.update(c.roundRef, { phase: 'RESULT', alive, left, result, phaseEndsAt: deleteField() });
-  tx.update(c.roomRef, { currentPhase: 'RESULT', lastWinner: win.winner });
+  tx.update(c.roomRef, { currentPhase: 'RESULT', lastWinner: win.winner, scores });
   return round;
 }
 
@@ -174,10 +186,12 @@ export const advanceTurn = (roomId, expectedIndex, skipUid = null) =>
     advanceTurnTx(tx, c, Date.now());
   });
 
-export const startVoting = (roomId) => withRound(roomId, { phase: 'DISCUSSION' }, (tx, c) => {
+export const startVoting = (roomId) => withRound(roomId, { phase: 'DISCUSSION', withSecrets: true }, (tx, c) => {
+  // Every voter picks as many players as there are imposters still in the game.
+  const slots = Math.max(1, engine.countSides(c.round.alive, c.secrets.roles, c.round.left).imposters);
   tx.update(c.roundRef, {
     phase: 'VOTING', phaseEndsAt: ts(Date.now() + c.room.settings.votingTimer * 1000),
-    voted: [], voteAttempt: 1, voteCandidates: effectiveAlive(c.round), revoteNotice: false,
+    voted: [], voteAttempt: 1, voteCandidates: effectiveAlive(c.round), voteSlots: slots, pendingElim: [], firstCounts: null, revoteNotice: false,
   });
   tx.update(c.roomRef, { currentPhase: 'VOTING' });
 });
@@ -185,24 +199,36 @@ export const startVoting = (roomId) => withRound(roomId, { phase: 'DISCUSSION' }
 const syncVoted = (roomId, attempt, voted) =>
   withRound(roomId, { phase: 'VOTING', check: (r) => r.voteAttempt === attempt }, (tx, c) => tx.update(c.roundRef, { voted }));
 
-/** Count votes: revote on a tie, eliminate, or end the match. Votes are only ever read by the host. */
+/**
+ * Count votes. Each voter picked `voteSlots` players (one per imposter) and that many players are
+ * eliminated. Ties for the last slot get one revote. If an imposter is among the eliminated the crew
+ * wins the round; otherwise the next sub-round starts, or the imposters win after the last one.
+ * Votes are only ever read by the host.
+ */
 const closeVoting = (roomId, attempt, votes, voted) =>
   withRound(roomId, { phase: 'VOTING', check: (r) => r.voteAttempt === attempt, withSecrets: true }, (tx, c) => {
     const { round, room, secrets } = c;
     const candidates = round.voteCandidates.filter((u) => !round.left.includes(u));
     const tally = engine.tallyVotes(votes, candidates);
-    const res = engine.resolveTally(tally, round.voteAttempt);
+    const res = engine.resolveVotes(tally, { slots: round.voteSlots || 1, attempt: round.voteAttempt, sure: round.pendingElim || [] });
     const now = Date.now();
     if (res.needRevote) {
-      tx.update(c.roundRef, { voteAttempt: 2, voteCandidates: res.leaders, voted: [], revoteNotice: true, phaseEndsAt: ts(now + room.settings.votingTimer * 1000) });
+      tx.update(c.roundRef, {
+        voteAttempt: 2, voteCandidates: res.revoteCandidates, voteSlots: res.revoteSlots, pendingElim: res.sure, firstCounts: tally.counts,
+        voted: [], revoteNotice: true, phaseEndsAt: ts(now + room.settings.votingTimer * 1000),
+      });
       return;
     }
-    const alive = round.alive.filter((u) => u !== res.eliminated);
+    const alive = round.alive.filter((u) => !res.eliminated.includes(u));
+    const eliminated = res.eliminated.map((u) => ({ uid: u, role: secrets.roles[u] }));
+    const caught = eliminated.filter((e) => e.role === 'IMPOSTER').length;
     const base = {
-      eliminatedUid: res.eliminated, eliminatedRole: res.eliminated ? secrets.roles[res.eliminated] : null,
-      counts: tally.counts, tie: res.tie, attempt: round.voteAttempt, matchOver: false,
+      eliminated, eliminatedUid: eliminated[0]?.uid ?? null, eliminatedRole: eliminated[0]?.role ?? null, caught,
+      counts: round.firstCounts || tally.counts, revoteCounts: round.firstCounts ? tally.counts : null,
+      tie: res.tie, attempt: round.voteAttempt, subRound: round.cycle, matchOver: false,
     };
-    const win = engine.evaluateWin({ ...engine.countSides(alive, secrets.roles, round.left), cycle: round.cycle, maxCycles: room.settings.rounds });
+    const subRounds = room.settings.subRounds ?? 3;
+    const win = engine.evaluateWin({ ...engine.countSides(alive, secrets.roles, round.left), cycle: round.cycle, maxCycles: subRounds, caught });
     if (win) { finishMatchTx(tx, c, { alive, left: round.left, win, base }); return; }
     tx.update(c.roundRef, { phase: 'RESULT', alive, result: base, voted, phaseEndsAt: deleteField() });
     tx.update(c.roomRef, { currentPhase: 'RESULT' });
@@ -214,7 +240,7 @@ const handleDeparture = (roomId, gone) =>
     const left = [...new Set([...c.round.left, ...gone])];
     const win = engine.evaluateWin({ ...engine.countSides(c.round.alive, c.secrets.roles, left), cycle: 0, maxCycles: Infinity });
     if (win) {
-      const base = c.round.result || { eliminatedUid: null, eliminatedRole: null, counts: {}, tie: false, attempt: 1 };
+      const base = c.round.result || { eliminated: [], eliminatedUid: null, eliminatedRole: null, caught: 0, counts: {}, tie: false, attempt: 1 };
       finishMatchTx(tx, c, { alive: c.round.alive, left, win: { ...win, reason: `${win.reason} (a player left the room)` }, base });
     } else tx.update(c.roundRef, { left });
   });

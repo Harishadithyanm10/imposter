@@ -3,6 +3,7 @@ import { deleteUser } from 'firebase/auth';
 import { auth, db } from './firebase.js';
 import { validateDisplayName } from '../lib/settings.js';
 import { leaveRoom } from './roomService.js';
+import { leaderboardEntry } from './leaderboardService.js';
 
 export const subscribeProfile = (uid, onData, onError) =>
   onSnapshot(doc(db, 'users', uid), (s) => onData(s.exists() ? { id: s.id, ...s.data() } : null), onError);
@@ -10,6 +11,8 @@ export const subscribeProfile = (uid, onData, onError) =>
 export async function updateProfile(uid, current, { displayName, fullName, avatar }) {
   const name = validateDisplayName(displayName);
   await runTransaction(db, async (tx) => {
+    const lbRef = doc(db, 'leaderboard', uid);
+    const onBoard = (await tx.get(lbRef)).exists(); // keep the public ranking name/avatar in step
     const patch = { fullName: (fullName || '').trim().slice(0, 60), avatar };
     if (name.toLowerCase() !== current.displayNameLower) {
       const newRef = doc(db, 'usernames', name.toLowerCase());
@@ -21,6 +24,7 @@ export async function updateProfile(uid, current, { displayName, fullName, avata
     }
     patch.displayName = name; patch.displayNameLower = name.toLowerCase();
     tx.update(doc(db, 'users', uid), patch);
+    if (onBoard) tx.update(lbRef, { displayName: name, avatar });
   });
 }
 
@@ -49,6 +53,7 @@ export async function deleteAccount(uid, profile) {
   const batch = writeBatch(db);
   history.docs.forEach((d) => batch.delete(d.ref));
   if (profile?.displayNameLower) batch.delete(doc(db, 'usernames', profile.displayNameLower));
+  batch.delete(doc(db, 'leaderboard', uid));
   batch.delete(doc(db, 'users', uid));
   await batch.commit();
   await deleteUser(auth.currentUser);
@@ -71,6 +76,8 @@ export async function recordResult({ roomId, uid, roomName, round, role }) {
       role, won, rounds: round.cycle, winner: round.result.winner, reason: round.result.reason,
       word: round.result.word, playerCount: Object.keys(round.players).length,
     });
-    tx.update(uRef, { gamesPlayed: u.data().gamesPlayed + 1, gamesWon: u.data().gamesWon + (won ? 1 : 0), lastMatchId: matchId });
+    const next = { gamesPlayed: u.data().gamesPlayed + 1, gamesWon: u.data().gamesWon + (won ? 1 : 0) };
+    tx.update(uRef, { ...next, lastMatchId: matchId });
+    tx.set(doc(db, 'leaderboard', uid), leaderboardEntry(uid, { ...u.data(), ...next })); // public ranking entry
   });
 }

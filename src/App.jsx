@@ -10,6 +10,9 @@ import CreateRoomPage from './pages/CreateRoomPage.jsx';
 import JoinRoomPage from './pages/JoinRoomPage.jsx';
 import RoomPage from './pages/RoomPage.jsx';
 import GameHistoryPage from './pages/GameHistoryPage.jsx';
+import LeaderboardPage from './pages/LeaderboardPage.jsx';
+import PassAndPlayPage from './pages/PassAndPlayPage.jsx';
+import HowToPlayPage from './pages/HowToPlayPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
@@ -20,6 +23,8 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/pass-and-play" element={<PassAndPlayPage />} />
+      <Route path="/how-to-play" element={<HowToPlayPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
@@ -27,6 +32,7 @@ export default function App() {
           <Route path="/create" element={<CreateRoomPage />} />
           <Route path="/join" element={<JoinRoomPage />} />
           <Route path="/join/:code" element={<JoinRoomPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/history" element={<GameHistoryPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>

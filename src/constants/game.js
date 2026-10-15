@@ -15,7 +15,7 @@ export const DIFFICULTIES = [
   { value: 'HARD', label: 'Hard' },
 ];
 export const DEFAULT_SETTINGS = {
-  roomName: '', maxPlayers: 8, imposters: 1, rounds: 3, clueTimer: 30, discussionTimer: 120, votingTimer: 45,
+  roomName: '', maxPlayers: 8, imposters: 1, rounds: 3, subRounds: 3, clueTimer: 30, discussionTimer: 120, votingTimer: 45,
   typedClues: false, gameMode: 'CLASSIC', category: 'RANDOM', difficulty: 'ANY', customWord: '', customImposterWord: '', hasCustomWords: false,
 };
 // Mirrors the server rule so the UI can guide hosts. The server is the authority.

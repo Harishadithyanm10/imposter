@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../services/firebase.js';
 import * as authService from '../services/authService.js';
 import { subscribeProfile } from '../services/profileService.js';
+import { syncMyLeaderboard } from '../services/leaderboardService.js';
 
 const AuthContext = createContext(null);
 
@@ -12,6 +13,7 @@ export function AuthProvider({ children }) {
   const [authReady, setAuthReady] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
   const registering = useRef(false);
+  const synced = useRef('');
 
   useEffect(() => onAuthStateChanged(auth, (u) => {
     setUser(u);
@@ -26,6 +28,10 @@ export function AuthProvider({ children }) {
     const unsub = subscribeProfile(user.uid, (p) => {
       setProfile(p);
       setProfileReady(true);
+      if (p) { // keep this player's public leaderboard entry present and current
+        const sig = `${p.id}|${p.displayName}|${p.avatar}|${p.gamesPlayed}|${p.gamesWon}`;
+        if (synced.current !== sig) { synced.current = sig; syncMyLeaderboard(p.id, p).catch(() => { synced.current = ''; }); }
+      }
       clearTimeout(healTimer);
       // Self-heal: signed in but no profile (e.g. interrupted first Google sign-in).
       if (!p && !registering.current) healTimer = setTimeout(() => { if (!registering.current) authService.ensureProfile(auth.currentUser).catch(() => {}); }, 1500);

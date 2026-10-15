@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DoorOpen, Gamepad2, Plus, Trophy } from 'lucide-react';
+import { BookOpen, DoorOpen, Gamepad2, Plus, Smartphone, Trophy } from 'lucide-react';
 import Button from '../components/common/Button.jsx';
 import Card from '../components/common/Card.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
@@ -35,6 +35,9 @@ export default function DashboardPage() {
         <div className="flex flex-wrap gap-3">
           <Button to="/create" size="lg"><Plus className="h-5 w-5" aria-hidden />Create room</Button>
           <Button to="/join" variant="secondary" size="lg"><DoorOpen className="h-5 w-5" aria-hidden />Join room</Button>
+          <Button to="/pass-and-play" variant="secondary" size="lg"><Smartphone className="h-5 w-5" aria-hidden />Pass the phone</Button>
+          <Button to="/leaderboard" variant="ghost" size="lg"><Trophy className="h-5 w-5" aria-hidden />Leaderboard</Button>
+          <Button to="/how-to-play" variant="ghost" size="lg"><BookOpen className="h-5 w-5" aria-hidden />How to play</Button>
         </div>
       </div>
 

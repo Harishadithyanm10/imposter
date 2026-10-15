@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { History, Home, LogOut, Play, User, UserCog } from 'lucide-react';
+import { BookOpen, History, Home, LogOut, Play, Trophy, User, UserCog } from 'lucide-react';
 import Logo from '../common/Logo.jsx';
 import Avatar from '../common/Avatar.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
@@ -9,6 +9,7 @@ import { cx } from '../../utils/cx.js';
 const LINKS = [
   { to: '/dashboard', label: 'Home', Icon: Home },
   { to: '/create', label: 'Play', Icon: Play },
+  { to: '/leaderboard', label: 'Ranks', Icon: Trophy },
   { to: '/history', label: 'History', Icon: History },
   { to: '/profile', label: 'Profile', Icon: User },
 ];
@@ -49,13 +50,14 @@ export default function Navbar() {
                 <hr className="my-1 border-ink-700" />
                 <button role="menuitem" onClick={() => { setOpen(false); navigate('/profile'); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-ink-800"><UserCog className="h-4 w-4" aria-hidden />Edit profile</button>
                 <button role="menuitem" onClick={() => { setOpen(false); navigate('/history'); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-ink-800"><History className="h-4 w-4" aria-hidden />Game history</button>
+                <button role="menuitem" onClick={() => { setOpen(false); navigate('/how-to-play'); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-ink-800"><BookOpen className="h-4 w-4" aria-hidden />How to play</button>
                 <button role="menuitem" onClick={async () => { setOpen(false); await logout(); navigate('/'); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-hot-400 hover:bg-ink-800"><LogOut className="h-4 w-4" aria-hidden />Log out</button>
               </div>
             )}
           </div>
         </div>
       </header>
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-ink-800 bg-ink-950/95 backdrop-blur md:hidden" aria-label="Main mobile">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-800 bg-ink-950/95 backdrop-blur md:hidden" aria-label="Main mobile">
         {LINKS.map(({ to, label, Icon }) => (
           <NavLink key={to} to={to} className={({ isActive }) => cx('flex flex-col items-center gap-1 py-2.5 text-xs font-semibold', isActive ? 'text-brand-300' : 'text-ink-400')}>
             <Icon className="h-5 w-5" aria-hidden />{label}
