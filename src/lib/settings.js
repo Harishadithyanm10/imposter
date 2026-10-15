@@ -1,4 +1,4 @@
-import { CATEGORIES } from './words.js';
+import { CATEGORIES } from './words.jsx';
 import { maxImposters } from './engine.js';
 
 export const MODES = ['CLASSIC', 'CUSTOM'];

@@ -6,7 +6,7 @@ import { collection, deleteField, doc, runTransaction, serverTimestamp, Timestam
 import { db } from '../services/firebase.js';
 import * as engine from './engine.js';
 import { shuffle } from './random.js';
-import { pickWords } from './words.js';
+import { pickWords } from './words.jsx';
 
 
 const REVEAL_MS = 30_000;

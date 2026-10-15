@@ -99,7 +99,7 @@ firebase deploy --only hosting
 
 ## 5. Project layout
 ```
-src/lib/        engine.js (rules), hostGame.js (host game loop), words.js, settings.js, random.js
+src/lib/        engine.js (rules), hostGame.js (host game loop), words.jsx, settings.js, random.js
 src/services/   firebase.js, authService, profileService, roomService, gameService
 src/hooks/      useRoomState, useHostEngine, useHostWatch, usePresence, useRecordResult, ...
 src/pages/      all 16 screens        src/components/  reusable UI
