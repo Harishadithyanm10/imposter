@@ -7,7 +7,7 @@ import { db } from '../services/firebase.js';
 import * as engine from './engine.js';
 import { shuffle } from './random.js';
 import { pickWords } from './words.jsx';
-
+import { loadWordBank } from '../services/wordBankService.js';
 
 const REVEAL_MS = 30_000;
 const OFFLINE_SKIP_MS = 10_000;
