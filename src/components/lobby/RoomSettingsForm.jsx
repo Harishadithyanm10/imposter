@@ -40,7 +40,7 @@ export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loadi
         <Input label="Rounds (1-10)" type="number" min={1} max={10} value={s.rounds} onChange={(e) => up('rounds', num(e.target.value, 1, 10))}
           hint="Each round has its own secret word and fresh roles." />
         <Input label="Sub-rounds per round (1-5)" type="number" min={1} max={5} value={s.subRounds} onChange={(e) => up('subRounds', num(e.target.value, 1, 5))}
-          hint={`Same word, ${s.subRounds} chance${s.subRounds === 1 ? '' : 's'} to vote. Catch an imposter in any sub-round and the crew wins the round. If they escape all ${s.subRounds}, the imposters win.`} />
+          hint={`Same word, up to ${s.subRounds} vote${s.subRounds === 1 ? '' : 's'}. Voted-out players watch. The crew wins once EVERY imposter is caught; if any imposter survives all ${s.subRounds}, the imposters win.`} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

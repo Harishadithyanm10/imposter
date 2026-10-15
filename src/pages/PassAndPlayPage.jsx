@@ -48,7 +48,7 @@ function closeVote(g) {
   const eliminated = res.eliminated.map((u) => ({ uid: u, role: g.roles[u] }));
   const caught = eliminated.filter((e) => e.role === 'IMPOSTER').length;
   const sides = engine.countSides(alive, g.roles);
-  const win = engine.evaluateWin({ ...sides, cycle: g.sub, maxCycles: g.settings.subRounds, caught });
+  const win = engine.evaluateWin({ ...sides, cycle: g.sub, maxCycles: g.settings.subRounds });
   const scores = win ? { crew: g.scores.crew + (win.winner === 'NORMAL' ? 1 : 0), imposters: g.scores.imposters + (win.winner === 'IMPOSTER' ? 1 : 0) } : g.scores;
   return {
     ...g, alive, scores, phase: eliminated.length ? 'EJECT' : 'RESULT',
@@ -189,7 +189,7 @@ export default function PassAndPlayPage() {
             <Select label="Topic" value={cfg.category} onChange={(v) => setCfg((c) => ({ ...c, category: v }))} options={CATEGORIES} />
             <Select label="Difficulty" value={cfg.difficulty} onChange={(v) => setCfg((c) => ({ ...c, difficulty: v }))} options={DIFFICULTIES} />
           </div>
-          <p className="text-xs text-ink-400">Each round has a new word. In every sub-round players speak a clue, talk, then vote. Catch an imposter in any sub-round and the crew wins the round; if they escape all {cfg.subRounds}, they win.</p>
+          <p className="text-xs text-ink-400">Each round has a new word. In every sub-round players speak a clue, talk, then vote. The crew wins a round once EVERY imposter is caught (voted-out players just watch). If any imposter survives all {cfg.subRounds} sub-rounds, the imposters win. Next round, everyone plays again with new roles.</p>
         </Card>
         <Button type="submit" size="lg" className="w-full">Start game</Button>
       </form>,
@@ -237,7 +237,7 @@ export default function PassAndPlayPage() {
     return shell(<>
       {head('Discussion', 'Talk it out. Who is bluffing? Voting starts when the timer ends.')}
       <Card className="mb-4 flex items-center justify-between gap-4"><p className="font-display text-xl font-bold">Time to talk</p><CountdownRing endsAtMs={g.discEndsAt} total={g.settings.discussionTimer} /></Card>
-      <p className="mb-4 rounded-2xl bg-ink-900/80 p-4 text-sm text-ink-300 ring-1 ring-ink-700">There {g.voteSlots === 1 ? 'is' : 'are'} <strong className="text-ink-100">{engine.countSides(g.alive, g.roles).imposters}</strong> imposter{engine.countSides(g.alive, g.roles).imposters === 1 ? '' : 's'} among the {g.alive.length} players still in. Everyone will pick that many players.</p>
+      <p className="mb-4 rounded-2xl bg-ink-900/80 p-4 text-sm text-ink-300 ring-1 ring-ink-700"><strong className="text-ink-100">{engine.countSides(g.alive, g.roles).imposters}</strong> imposter{engine.countSides(g.alive, g.roles).imposters === 1 ? ' is' : 's are'} still hiding among the {g.alive.length} players still in. Everyone will pick that many players.</p>
       <Button size="lg" className="w-full" onClick={() => setG((p) => startVote(p))}><Vote className="h-5 w-5" aria-hidden />Start voting now</Button>
     </>);
   }
@@ -277,7 +277,7 @@ export default function PassAndPlayPage() {
       {r.eliminated.length ? (<><p className="mb-3 text-sm text-ink-400">Eliminated</p><ul className="space-y-3">{r.eliminated.map((e) => <li key={e.uid} className="flex items-center gap-3"><Avatar name={byId[e.uid].name} avatar={byId[e.uid].avatar} size="lg" /><div className="min-w-0"><p className="truncate font-display text-xl font-bold">{byId[e.uid].name}</p><p className={e.role === 'IMPOSTER' ? 'font-semibold text-emerald-300' : 'font-semibold text-hot-400'}>{e.role === 'IMPOSTER' ? 'Was an imposter!' : 'Was NOT an imposter.'}</p></div></li>)}</ul></>)
         : <div><p className="font-display text-2xl font-bold">Nobody was eliminated</p><p className="text-ink-300">{r.tie ? 'The revote was tied again.' : 'No votes were cast.'}</p></div>}
     </Card>
-    {!win && <Card className="!p-4"><p className="font-semibold">No imposter was caught.</p><p className="mt-1 text-sm text-ink-300">Same word, next sub-round. {g.settings.subRounds - g.sub} more {g.settings.subRounds - g.sub === 1 ? 'chance' : 'chances'} left.</p></Card>}
+    {!win && <Card className="!p-4"><p className="font-semibold">{r.caught > 0 ? `${r.caught} imposter${r.caught > 1 ? 's' : ''} caught, but ${r.remaining} ${r.remaining === 1 ? 'is' : 'are'} still hiding.` : 'No imposter was caught.'}</p><p className="mt-1 text-sm text-ink-300">Same word, next sub-round. Eliminated players just watch. {g.settings.subRounds - g.sub} sub-round{g.settings.subRounds - g.sub === 1 ? '' : 's'} left to catch every imposter.</p></Card>}
     <Card><h2 className="mb-3 text-lg font-bold">Vote totals</h2><ul className="space-y-1.5">{counts.map(([u, n]) => <li key={u} className="flex justify-between gap-3 text-sm"><span className="truncate">{byId[u].name}</span><span className="font-bold tabular-nums">{n}</span></li>)}</ul></Card>
     {win && (
       <Card>

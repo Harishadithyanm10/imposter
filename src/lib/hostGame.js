@@ -201,8 +201,9 @@ const syncVoted = (roomId, attempt, voted) =>
 
 /**
  * Count votes. Each voter picked `voteSlots` players (one per imposter) and that many players are
- * eliminated. Ties for the last slot get one revote. If an imposter is among the eliminated the crew
- * wins the round; otherwise the next sub-round starts, or the imposters win after the last one.
+ * eliminated (voters pick one player per imposter STILL HIDING). Ties for the last slot get one revote.
+ * The crew wins the round only once every imposter is caught; otherwise the same word continues into
+ * the next sub-round (eliminated players watch), or the imposters win after the last sub-round.
  * Votes are only ever read by the host.
  */
 const closeVoting = (roomId, attempt, votes, voted) =>
@@ -227,8 +228,10 @@ const closeVoting = (roomId, attempt, votes, voted) =>
       counts: round.firstCounts || tally.counts, revoteCounts: round.firstCounts ? tally.counts : null,
       tie: res.tie, attempt: round.voteAttempt, subRound: round.cycle, matchOver: false,
     };
+    const sides = engine.countSides(alive, secrets.roles, round.left);
+    base.impostersLeft = sides.imposters; // imposters still hiding (public: caught ones are revealed)
     const subRounds = room.settings.subRounds ?? 3;
-    const win = engine.evaluateWin({ ...engine.countSides(alive, secrets.roles, round.left), cycle: round.cycle, maxCycles: subRounds, caught });
+    const win = engine.evaluateWin({ ...sides, cycle: round.cycle, maxCycles: subRounds });
     if (win) { finishMatchTx(tx, c, { alive, left: round.left, win, base }); return; }
     tx.update(c.roundRef, { phase: 'RESULT', alive, result: base, voted, phaseEndsAt: deleteField() });
     tx.update(c.roomRef, { currentPhase: 'RESULT' });

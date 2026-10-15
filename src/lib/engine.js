@@ -58,22 +58,22 @@ function resolveVotes(tally, { slots, attempt, sure = [] }) {
 }
 
 /**
- * Round rules (one word = one round, split into sub-rounds):
- *  - If any imposter is caught in a sub-round, the crew wins the round.
- *  - If the imposters match or outnumber the remaining players, the imposters win the round.
- *  - If the imposters escape the LAST sub-round (cycle >= maxCycles), the imposters win the round.
- *  - Otherwise play the next sub-round.
+ * Round rules (one word = one round, split into sub-rounds). Players eliminated in a sub-round
+ * become spectators until the next ROUND, where everyone plays again with new roles.
+ *  - The crew wins ONLY when every imposter has been caught (possibly over several sub-rounds).
+ *  - The imposters win if they match or outnumber the players still in the game.
+ *  - The imposters also win if, after the LAST sub-round, at least one of them is still hiding.
+ *  - Otherwise the same word continues into the next sub-round.
  */
-function evaluateWin({ imposters, normals, cycle, maxCycles, caught = 0 }) {
-  if (caught > 0) {
-    return { winner: 'NORMAL', reason: `${caught > 1 ? `${caught} imposters were` : 'An imposter was'} caught in sub-round ${cycle}. The crew wins this round.` };
+function evaluateWin({ imposters, normals, cycle, maxCycles }) {
+  if (imposters <= 0) {
+    return { winner: 'NORMAL', reason: cycle > 0 ? `Every imposter was caught by sub-round ${cycle}. The crew wins this round.` : 'All imposters were eliminated.' };
   }
-  if (imposters <= 0) return { winner: 'NORMAL', reason: 'All imposters were eliminated.' };
   if (imposters >= normals) {
     return { winner: 'IMPOSTER', reason: 'The imposters now match or outnumber the remaining players.' };
   }
   if (cycle >= maxCycles) {
-    return { winner: 'IMPOSTER', reason: `The imposters escaped all ${maxCycles} sub-round${maxCycles === 1 ? '' : 's'}.` };
+    return { winner: 'IMPOSTER', reason: `${imposters === 1 ? 'An imposter was' : `${imposters} imposters were`} still hiding after all ${maxCycles} sub-round${maxCycles === 1 ? '' : 's'}.` };
   }
   return null;
 }

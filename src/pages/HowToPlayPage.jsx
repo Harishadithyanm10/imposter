@@ -10,12 +10,12 @@ const FLOW = [
   { Icon: MessageSquare, title: '2. Clue turns', text: 'Players take turns, each with a timer. In "timer only" games you say your clue out loud and tap Done. If the host chose typed clues, you type one short clue (up to three words). Never say the secret word.' },
   { Icon: Users, title: '3. Discussion', text: 'Compare clues and argue. Whose clue sounded off? Who seemed to be guessing?' },
   { Icon: Vote, title: '4. Vote', text: 'Everyone votes in secret. You pick as many players as there are imposters: with 3 imposters you pick 3 different players.' },
-  { Icon: Swords, title: '5. Result', text: 'The players with the most votes are eliminated and their roles are revealed (with an ejection animation). Then the round either ends or the next sub-round begins.' },
+  { Icon: Swords, title: '5. Result', text: 'The players with the most votes are eliminated and their roles are revealed (with an ejection animation). Eliminated players watch as spectators for the rest of the round. Then the round ends, or the same word continues into the next sub-round.' },
 ];
 
 const WINS = [
-  ['The crew wins the round', 'At least one imposter is caught (voted out) in ANY sub-round.'],
-  ['The imposters win the round', 'They escape every sub-round without being caught, OR they match or outnumber the players still in the game.'],
+  ['The crew wins the round', 'EVERY imposter has been caught (voted out). It can take several sub-rounds: catching only one of two imposters does not win the round.'],
+  ['The imposters win the round', 'At least one imposter is still hiding after the last sub-round, OR the imposters match or outnumber the players still in the game.'],
 ];
 
 const TABLE = [
@@ -71,10 +71,10 @@ export default function HowToPlayPage() {
 
         <Section id="voting" title="How voting and elimination work">
           <ul className="list-disc space-y-2 pl-5 text-ink-300">
-            <li>Each player picks <strong className="text-ink-100">one player per imposter</strong> (1 imposter = 1 pick, 3 imposters = 3 picks). You cannot vote for yourself or pick the same player twice.</li>
+            <li>Each player picks <strong className="text-ink-100">one player per imposter still hiding</strong> (2 imposters left = 2 picks, 1 left = 1 pick). You cannot vote for yourself or pick the same player twice.</li>
             <li>The players with the <strong className="text-ink-100">most votes</strong> are eliminated, as many as there are imposters. Players with zero votes are never eliminated.</li>
             <li>If players are <strong className="text-ink-100">tied for the last spot</strong>, only those tied players get one revote. Players who were already clearly voted out stay out. If the revote is tied again, the tied players are spared.</li>
-            <li>Eliminated players cannot speak or vote in later sub-rounds of that round, but they can keep watching.</li>
+            <li>The same word continues in the next sub-round. Eliminated players cannot speak or vote any more in that round, but they keep watching. When the round ends, <strong className="text-ink-100">everyone plays again</strong> in the next round, with a new word and new imposters.</li>
           </ul>
         </Section>
 
@@ -84,7 +84,7 @@ export default function HowToPlayPage() {
               <Card key={t} className={`!p-4 ${i === 0 ? 'border-emerald-500/40' : 'border-hot-500/40'}`}><p className={`font-bold ${i === 0 ? 'text-emerald-300' : 'text-hot-400'}`}>{t}</p><p className="mt-1 text-sm text-ink-300">{d}</p></Card>
             ))}
           </div>
-          <p className="mt-3 text-sm text-ink-300">The moment a round is decided, the secret word, the clue and the imposters are revealed and the next round begins with a new word and new roles.</p>
+          <p className="mt-3 text-sm text-ink-300">The moment a round is decided, the secret word, the clue and the imposters are revealed. Then the next round begins with a new word and new roles for everyone, including players who were eliminated.</p>
         </Section>
 
         <Section id="points" title="The points system">
@@ -106,7 +106,7 @@ export default function HowToPlayPage() {
 
           <Card className="mt-3">
             <h3 className="font-bold">Example</h3>
-            <p className="mt-2 text-sm text-ink-300">7 players, 2 imposters, 3 sub-rounds, 3 rounds. In round 1 the crew vote out 2 players, but both were innocent: nobody was caught, so sub-round 2 starts with 5 players. In sub-round 2 they vote out an imposter. The <strong className="text-emerald-300">crew wins round 1</strong>, so the crew gets 1 point and every crew member gets +1 win and +1 game; the imposters get +1 game and no win. Round 2 begins with a new word and new roles.</p>
+            <p className="mt-2 text-sm text-ink-300">10 players, 2 imposters, 3 sub-rounds. <strong className="text-ink-100">Sub-round 1:</strong> everyone picks 2 players. The 2 most voted are out: one was an imposter, one was innocent. One imposter is still hiding, so the round continues with the same word and 8 players (the 2 eliminated players watch). <strong className="text-ink-100">Sub-round 2:</strong> everyone still in picks 1 player and the last imposter is caught. Every imposter is caught, so the <strong className="text-emerald-300">crew wins the round</strong>: the crew gets 1 point, each crew member gets +1 win and +1 game, and the imposters get +1 game and no win. <strong className="text-ink-100">Round 2</strong> then starts with a new word and new imposters, and all 10 players take part again. If the last imposter had survived all 3 sub-rounds, the imposters would have won the round instead.</p>
           </Card>
         </Section>
 

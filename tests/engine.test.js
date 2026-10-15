@@ -66,10 +66,14 @@ test('single imposter keeps the classic one-vote behaviour', () => {
   assert.equal(tie.needRevote, true);
 });
 
-test('round rules: any imposter caught = crew wins; escaping every sub-round = imposters win', () => {
-  assert.equal(e.evaluateWin({ imposters: 2, normals: 5, cycle: 1, maxCycles: 3, caught: 1 }).winner, 'NORMAL');
-  assert.equal(e.evaluateWin({ imposters: 3, normals: 6, cycle: 2, maxCycles: 3, caught: 0 }), null);
-  assert.equal(e.evaluateWin({ imposters: 3, normals: 6, cycle: 3, maxCycles: 3, caught: 0 }).winner, 'IMPOSTER');
+test('round rules: crew wins only when EVERY imposter is caught; a survivor after the last sub-round = imposters win', () => {
+  // 2 imposters, one caught in sub-round 1: the round goes on with the same word
+  assert.equal(e.evaluateWin({ imposters: 1, normals: 7, cycle: 1, maxCycles: 3 }), null);
+  // the last one is caught in sub-round 2: crew wins
+  assert.equal(e.evaluateWin({ imposters: 0, normals: 7, cycle: 2, maxCycles: 3 }).winner, 'NORMAL');
+  // an imposter is still hiding after the final sub-round: imposters win
+  assert.equal(e.evaluateWin({ imposters: 1, normals: 6, cycle: 3, maxCycles: 3 }).winner, 'IMPOSTER');
+  assert.equal(e.evaluateWin({ imposters: 3, normals: 6, cycle: 2, maxCycles: 3 }), null);
 });
 
 test('victory conditions', () => {

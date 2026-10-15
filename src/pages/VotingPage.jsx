@@ -32,7 +32,7 @@ export default function VotingPage() {
 
   const subtitle = revote
     ? `Tie for the last ${slots > 1 ? 'spots' : 'spot'}. Pick ${slots} of the tied players.`
-    : slots > 1 ? `There are ${slots} imposters. Pick ${slots} different players.` : 'Who is the imposter? Votes stay secret until everyone has voted.';
+    : slots > 1 ? `${slots} imposters are still hiding. Pick ${slots} different players.` : 'One imposter is still hiding. Who is it? Votes stay secret until everyone has voted.';
 
   return (
     <div>

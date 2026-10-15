@@ -47,9 +47,10 @@ export default function ResultsPage() {
   const [animDone, setAnimDone] = useState(eliminated.length === 0);
   useEffect(() => { setAnimDone(eliminated.length === 0); }, [round.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const remaining = r.matchOver
+  // imposters still hiding after this vote (caught ones are revealed, so this number is public)
+  const remaining = r.impostersLeft ?? (r.matchOver
     ? (r.imposters || []).filter((u) => !eliminated.some((e) => e.uid === u) && !round.left.includes(u)).length
-    : room.settings.imposters;
+    : Math.max(0, room.settings.imposters - (r.caught || 0)));
   const scene = eliminated.map((e) => ({ name: playerOf(e.uid).displayName, avatar: playerOf(e.uid).avatar, role: e.role }));
   const scores = r.scores || room.scores || { crew: 0, imposters: 0 };
   const title = r.gameOver ? 'Game over' : r.matchOver ? (r.winner === 'NORMAL' ? 'The crew wins this round' : 'The imposters win this round') : `Sub-round ${round.cycle} result`;
@@ -96,8 +97,8 @@ export default function ResultsPage() {
 
       {!r.matchOver && (
         <Card className="!p-4">
-          <p className="font-semibold">No imposter was caught.</p>
-          <p className="mt-1 text-sm text-ink-300">Same word, new sub-round. {subRounds - round.cycle} more {subRounds - round.cycle === 1 ? 'chance' : 'chances'} to catch an imposter before they escape.</p>
+          <p className="font-semibold">{r.caught > 0 ? `${r.caught} imposter${r.caught > 1 ? 's' : ''} caught, but ${remaining} ${remaining === 1 ? 'is' : 'are'} still hiding.` : 'No imposter was caught.'}</p>
+          <p className="mt-1 text-sm text-ink-300">The same word continues. Eliminated players now watch as spectators. The crew only wins once <strong className="text-ink-100">every</strong> imposter is caught, and there {subRounds - round.cycle === 1 ? 'is' : 'are'} {subRounds - round.cycle} sub-round{subRounds - round.cycle === 1 ? '' : 's'} left to do it.</p>
         </Card>
       )}
 
