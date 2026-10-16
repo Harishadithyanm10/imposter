@@ -56,8 +56,12 @@ function validateSettings(input, { memberCount = 1, existingHasCustom = false } 
   const maxPlayers = int(input.maxPlayers, 'Maximum players', 3, 30);
   if (maxPlayers < memberCount) throw bad(`Maximum players cannot be below the ${memberCount} players already in the room.`);
   const imposters = int(input.imposters, 'Imposters', 1, 10);
-  if (imposters > maxImposters(maxPlayers)) {
-    throw bad(`With ${maxPlayers} players you can have at most ${maxImposters(maxPlayers)} imposter(s).`);
+  const mrWhite = input.mrWhite === true;
+  // Mr. White counts as one more hidden player, so the crew still has to be the majority.
+  if (imposters + (mrWhite ? 1 : 0) > maxImposters(maxPlayers)) {
+    throw bad(mrWhite
+      ? `With ${maxPlayers} players, Mr. White mode allows at most ${Math.max(0, maxImposters(maxPlayers) - 1)} imposter(s). Raise the player limit or lower the imposters.`
+      : `With ${maxPlayers} players you can have at most ${maxImposters(maxPlayers)} imposter(s).`);
   }
   const gameMode = input.gameMode;
   if (!MODES.includes(gameMode)) throw bad('Unknown game mode.');
@@ -86,6 +90,13 @@ function validateSettings(input, { memberCount = 1, existingHasCustom = false } 
     discussionTimer: int(input.discussionTimer, 'Discussion timer', 30, 600),
     votingTimer: int(input.votingTimer, 'Voting timer', 15, 180),
     typedClues: input.typedClues === true, // false = timer only (players speak), true = players type clues
+    // optional rule sets (all OFF by default, except spectator reactions)
+    mrWhite, // one extra hidden player with no word and no clue
+    lastStand: input.lastStand === true, // an eliminated imposter gets one private guess at the word
+    extraHint: input.extraHint === true, // each imposter may reveal one extra hint per round
+    randomEvents: input.randomEvents === true, // Reverse order / Panic mode between sub-rounds
+    reactions: input.reactions !== false, // eliminated players can send emoji reactions
+    guessTimer: int(input.guessTimer ?? 15, 'Guess timer', 5, 60),
     gameMode,
     category,
     difficulty,

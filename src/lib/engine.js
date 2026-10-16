@@ -78,16 +78,67 @@ function evaluateWin({ imposters, normals, cycle, maxCycles }) {
   return null;
 }
 
+/** Roles on the hidden team: imposters and (in Mr. White mode) Mr. White. */
+const isHidden = (role) => role === 'IMPOSTER' || role === 'WHITE';
+
+/** `imposters` counts every hidden player still in the game (imposters + Mr. White). */
 function countSides(aliveUids, roles, left = []) {
   let imposters = 0;
   let normals = 0;
   for (const u of aliveUids) {
     if (left.includes(u)) continue;
-    if (roles[u] === 'IMPOSTER') imposters += 1;
+    if (isHidden(roles[u])) imposters += 1;
     else normals += 1;
   }
   return { imposters, normals };
 }
+
+/** Can this many players support the configured roles? (the crew must always start as the majority) */
+function rolesFit(n, imposters, mrWhite) {
+  const hidden = imposters + (mrWhite ? 1 : 0);
+  return n >= 3 && hidden <= maxImposters(n);
+}
+
+// ---------- final word guess ("last stand" / Mr. White) ----------
+const normalizeGuess = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+const isCorrectGuess = (guess, word) => normalizeGuess(guess) !== '' && normalizeGuess(guess) === normalizeGuess(word);
+
+/**
+ * Judge every submitted guess. Deterministic: guesses are ordered by submit time, then uid, and the
+ * FIRST correct one is credited. The result is a single outcome, so several correct guesses that
+ * arrive together can never award the round twice.
+ * @param {{uid:string, guess:string, at?:number}[]} guesses
+ */
+function resolveGuesses(guesses, word) {
+  const ordered = [...guesses].sort((a, b) => (a.at || 0) - (b.at || 0) || String(a.uid).localeCompare(String(b.uid)));
+  const seen = new Set();
+  const entries = [];
+  for (const g of ordered) {
+    if (seen.has(g.uid)) continue; // one guess per player, ever
+    seen.add(g.uid);
+    entries.push({ uid: g.uid, guess: String(g.guess).slice(0, 40), correct: isCorrectGuess(g.guess, word) });
+  }
+  return { entries, winnerUid: entries.find((e) => e.correct)?.uid ?? null };
+}
+
+/** A vague extra hint that never contains the word: first letter + number of letters. */
+function buildExtraHint(word) {
+  const letters = String(word).replace(/\s+/g, '');
+  return `Starts with “${letters[0].toUpperCase()}” · ${letters.length} letters`;
+}
+
+// ---------- random events between sub-rounds ----------
+const EVENT_TYPES = ['REVERSE', 'PANIC'];
+const EVENT_CHANCE = 0.65;
+/** Pick at most one event; never the same one twice in a row when another is available. */
+function pickEvent({ enabled = EVENT_TYPES, last = null, rand = Math.random } = {}) {
+  const pool = enabled.filter((e) => EVENT_TYPES.includes(e));
+  if (!pool.length || rand() >= EVENT_CHANCE) return null;
+  const options = pool.length > 1 ? pool.filter((e) => e !== last) : pool;
+  return options[Math.floor(rand() * options.length) % options.length];
+}
+/** Clue seconds for a sub-round: Panic Mode halves the timer (minimum 5 seconds). */
+const clueSeconds = (settings, eventType) => (eventType === 'PANIC' ? Math.max(5, Math.floor(settings.clueTimer / 2)) : settings.clueTimer);
 
 /** Deterministic host transfer: earliest-joined connected member, else earliest-joined member. */
 function pickNewHost(members, excludeUid, { onlineOnly = false } = {}) {
@@ -109,4 +160,4 @@ function clueLeaksWord(clue, secretWord) {
   return c.includes(` ${norm(secretWord)} `);
 }
 
-export { maxImposters, tallyVotes, resolveTally, resolveVotes, evaluateWin, countSides, pickNewHost, allVoted, clueLeaksWord };
+export { isHidden, rolesFit, normalizeGuess, isCorrectGuess, resolveGuesses, buildExtraHint, pickEvent, clueSeconds, EVENT_TYPES, maxImposters, tallyVotes, resolveTally, resolveVotes, evaluateWin, countSides, pickNewHost, allVoted, clueLeaksWord };

@@ -9,6 +9,7 @@ import { engineStep } from '../lib/hostGame.js';
  */
 export function useHostEngine(roomId, state, isHost) {
   const [votes, setVotes] = useState([]);
+  const [guesses, setGuesses] = useState([]);
   const latest = useRef(null);
   const busy = useRef(false);
   const roundId = state.room?.currentRoundId;
@@ -19,7 +20,15 @@ export function useHostEngine(roomId, state, isHost) {
     return onSnapshot(collection(db, 'rooms', roomId, 'rounds', roundId, 'votes'), (s) => setVotes(s.docs.map((d) => d.data())), () => {});
   }, [isHost, roomId, roundId]);
 
-  latest.current = { ...state, votes };
+  // Private final guesses: Security Rules let only the host (and each author) read them.
+  useEffect(() => {
+    setGuesses([]);
+    if (!isHost || !roundId) return undefined;
+    return onSnapshot(collection(db, 'rooms', roomId, 'rounds', roundId, 'guesses'),
+      (s) => setGuesses(s.docs.map((d) => ({ ...d.data(), at: d.data().submittedAt?.toMillis?.() || 0 }))), () => {});
+  }, [isHost, roomId, roundId]);
+
+  latest.current = { ...state, votes, guesses };
 
   const run = async () => {
     if (busy.current || !latest.current) return;
@@ -33,5 +42,5 @@ export function useHostEngine(roomId, state, isHost) {
     const id = setInterval(run, 1000); // and keep timers moving
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, state.room, state.round, state.clues, state.acks, state.members, votes]);
+  }, [isHost, state.room, state.round, state.clues, state.acks, state.members, votes, guesses]);
 }

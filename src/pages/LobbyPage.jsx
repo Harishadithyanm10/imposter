@@ -11,6 +11,7 @@ import { useToast } from '../contexts/ToastContext.jsx';
 import { useAsyncAction } from '../hooks/useAsyncAction.js';
 import { CATEGORIES, DIFFICULTIES, GAME_MODES, labelOf, maxImposters } from '../constants/game.js';
 import { startMatch } from '../lib/hostGame.js';
+import { rolesFit } from '../lib/engine.js';
 import { closeRoom, kickPlayer, leaveRoom, setReady, updateSettings } from '../services/roomService.js';
 import { cx } from '../utils/cx.js';
 
@@ -31,9 +32,10 @@ export default function LobbyPage() {
   const readyCount = others.filter((m) => m.isReady).length;
   const enoughPlayers = members.length >= 3;
   const allReady = readyCount === others.length;
-  const imposterOk = s.imposters <= maxImposters(members.length);
+  const imposterOk = rolesFit(members.length, s.imposters, s.mrWhite === true);
+  const needPlayers = 2 * (s.imposters + (s.mrWhite ? 1 : 0)) + 1;
   const canStart = enoughPlayers && allReady && imposterOk;
-  const blocker = !enoughPlayers ? 'Need at least 3 players.' : !imposterOk ? `Too many imposters for ${members.length} players. Lower it in settings.`
+  const blocker = !enoughPlayers ? 'Need at least 3 players.' : !imposterOk ? `${s.imposters} imposter${s.imposters === 1 ? '' : 's'}${s.mrWhite ? ' plus Mr. White' : ''} needs at least ${needPlayers} players. Change the settings or wait for more players.`
     : !allReady ? `Waiting for ${others.length - readyCount} player(s) to be ready.` : '';
 
   async function copy(text, msg) {
@@ -45,8 +47,8 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_20rem] lg:gap-6">
-      <section className="space-y-4 sm:space-y-6">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6">
+      <section className="min-w-0 space-y-4 sm:space-y-6">
         <Card>
           <p className="text-sm text-ink-400">Room code</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -86,7 +88,8 @@ export default function LobbyPage() {
           <h2 className="mb-3 text-lg font-bold">Settings</h2>
           <dl className="space-y-1.5 text-sm">
             {[['Mode', labelOf(GAME_MODES, s.gameMode)], ['Imposters', s.imposters], ['Rounds', s.rounds], ['Sub-rounds', s.subRounds ?? 3],
-              ['Clues', s.typedClues ? 'Typed' : 'Timer only (spoken)'], ['Time per player', `${s.clueTimer}s`], ['Discussion', `${s.discussionTimer}s`], ['Voting', `${s.votingTimer}s`],
+              ['Clues', s.typedClues ? 'Typed' : 'Timer only (spoken)'],
+            ...(s.mrWhite || s.lastStand || s.extraHint || s.randomEvents ? [['Special rules', [s.mrWhite && 'Mr. White', s.lastStand && 'Last stand', s.extraHint && 'Extra hint', s.randomEvents && 'Random events'].filter(Boolean).join(', ')]] : []), ['Time per player', `${s.clueTimer}s`], ['Discussion', `${s.discussionTimer}s`], ['Voting', `${s.votingTimer}s`],
               ...(s.gameMode === 'CUSTOM' ? [['Words', 'Custom (hidden)']] : [['Category', labelOf(CATEGORIES, s.category)], ['Difficulty', labelOf(DIFFICULTIES, s.difficulty)]])]
               .map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-ink-400">{k}</dt><dd className="font-semibold">{v}</dd></div>)}
           </dl>

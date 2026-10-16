@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as e from '../src/lib/engine.js';
-import { BANK, pickWords } from '../src/lib/words.jsx';
+import { BANK, pickWords } from '../src/lib/words.js';
 import { roomCode, shuffle } from '../src/lib/random.js';
 
 test('maxImposters keeps normals as the majority', () => {
@@ -121,4 +121,48 @@ test('word bank: clue never contains the word, many topics, recent words avoided
 test('room codes use the safe alphabet', () => {
   for (let i = 0; i < 200; i += 1) assert.match(roomCode(), /^[2-9A-HJKMNP-Z]{6}$/);
   assert.equal(shuffle([1, 2, 3, 4]).length, 4);
+});
+
+test('Mr. White counts as hidden; roles must leave the crew a majority', () => {
+  const roles = { a: 'IMPOSTER', b: 'WHITE', c: 'NORMAL', d: 'NORMAL', f: 'NORMAL' };
+  assert.deepEqual(e.countSides(['a', 'b', 'c', 'd', 'f'], roles), { imposters: 2, normals: 3 });
+  assert.equal(e.isHidden('WHITE'), true);
+  assert.equal(e.isHidden('NORMAL'), false);
+  assert.equal(e.rolesFit(5, 1, true), true);
+  assert.equal(e.rolesFit(4, 1, true), false); // 2 hidden of 4 is not a crew majority
+  assert.equal(e.rolesFit(3, 1, false), true);
+  assert.equal(e.rolesFit(3, 1, true), false);
+});
+
+test('final guess: trimmed, case-insensitive, exactly one credited winner', () => {
+  assert.equal(e.isCorrectGuess('  tEa ', 'Tea'), true);
+  assert.equal(e.isCorrectGuess('ice   cream', 'Ice cream'), true);
+  assert.equal(e.isCorrectGuess('', 'Tea'), false);
+  assert.equal(e.isCorrectGuess('coffee', 'Tea'), false);
+  const out = e.resolveGuesses([
+    { uid: 'b', guess: 'tea', at: 200 }, { uid: 'a', guess: 'TEA', at: 100 }, { uid: 'c', guess: 'wrong', at: 50 }, { uid: 'a', guess: 'second try', at: 300 },
+  ], 'Tea');
+  assert.equal(out.winnerUid, 'a'); // earliest correct guess is credited, once
+  assert.equal(out.entries.length, 3); // a second guess from the same player is ignored
+  assert.equal(e.resolveGuesses([{ uid: 'c', guess: 'nope' }], 'Tea').winnerUid, null);
+});
+
+test('extra hint never contains the word', () => {
+  for (const w of ['Tea', 'Ice cream', 'Auto rickshaw', 'Cat']) {
+    const h = e.buildExtraHint(w);
+    assert.equal(h.toLowerCase().includes(w.toLowerCase()), false, h);
+  }
+  assert.equal(e.buildExtraHint('Tea'), 'Starts with “T” · 3 letters');
+});
+
+test('random events: one at a time, never the same twice in a row, panic halves time (min 5s)', () => {
+  assert.equal(e.pickEvent({ enabled: [], rand: () => 0 }), null);
+  assert.equal(e.pickEvent({ rand: () => 0.99 }), null); // no event this time
+  for (let i = 0; i < 40; i += 1) assert.notEqual(e.pickEvent({ last: 'REVERSE', rand: () => 0.1 + (i % 5) * 0.01 }), 'REVERSE');
+  assert.equal(e.pickEvent({ enabled: ['PANIC'], last: 'PANIC', rand: () => 0 }), 'PANIC'); // only one available
+  assert.equal(e.clueSeconds({ clueTimer: 30 }, 'PANIC'), 15);
+  assert.equal(e.clueSeconds({ clueTimer: 15 }, 'PANIC'), 7);
+  assert.equal(e.clueSeconds({ clueTimer: 8 }, 'PANIC'), 5);
+  assert.equal(e.clueSeconds({ clueTimer: 30 }, 'REVERSE'), 30);
+  assert.equal(e.clueSeconds({ clueTimer: 30 }, null), 30);
 });

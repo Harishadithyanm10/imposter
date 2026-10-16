@@ -15,6 +15,7 @@ service cloud.firestore {
     function memberPath(roomId, uid) { return /databases/$(database)/documents/rooms/$(roomId)/members/$(uid); }
     function rolePath(roomId, uid) { return /databases/$(database)/documents/rooms/$(roomId)/privateRoles/$(uid); }
     function roundPath(roomId, roundId) { return /databases/$(database)/documents/rooms/$(roomId)/rounds/$(roundId); }
+    function abilityPath(roomId, id) { return /databases/$(database)/documents/rooms/$(roomId)/abilityUse/$(id); }
     function histPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/history/$(id); }
     function isMember(roomId) { return signedIn() && exists(memberPath(roomId, request.auth.uid)); }
     function isHost(roomId) {
@@ -68,7 +69,7 @@ service cloud.firestore {
           && get(roundPath(request.resource.data.roomId, request.resource.data.roundId)).data.matchId == matchId
           && get(rolePath(request.resource.data.roomId, uid)).data.matchId == matchId
           && request.resource.data.role == get(rolePath(request.resource.data.roomId, uid)).data.role
-          && request.resource.data.won == ((get(rolePath(request.resource.data.roomId, uid)).data.role == 'IMPOSTER')
+          && request.resource.data.won == ((get(rolePath(request.resource.data.roomId, uid)).data.role in ['IMPOSTER', 'WHITE'])
                == (get(roundPath(request.resource.data.roomId, request.resource.data.roundId)).data.result.winner == 'IMPOSTER'));
         allow update: if false;
       }
@@ -198,6 +199,48 @@ service cloud.firestore {
         allow write: if isHost(roomId);
       }
 
+      // "One More Hint": the host writes each imposter's extra hint at deal time, but the imposter can only
+      // READ it once their own (create-only, one-per-match) abilityUse record exists. That record can only be
+      // created by a living imposter, during the discussion phase, when the host enabled the option.
+      match /extraHints/{uid} {
+        allow read: if isOwner(uid) && isMember(roomId)
+          && resource.data.matchId == get(roomPath(roomId)).data.matchId
+          && exists(abilityPath(roomId, resource.data.matchId + '_' + uid));
+        allow write: if isHost(roomId);
+      }
+      match /abilityUse/{useId} {
+        allow get: if isMember(roomId) && useId.split('_')[1] == request.auth.uid;
+        allow list: if false;
+        allow create: if isMember(roomId)
+          && request.resource.data.keys().hasOnly(['uid', 'matchId', 'usedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.usedAt == request.time
+          && request.resource.data.matchId == get(roomPath(roomId)).data.matchId
+          && useId == request.resource.data.matchId + '_' + request.auth.uid
+          && get(roomPath(roomId)).data.settings.extraHint == true
+          && get(rolePath(roomId, request.auth.uid)).data.role == 'IMPOSTER'
+          && get(rolePath(roomId, request.auth.uid)).data.matchId == request.resource.data.matchId
+          && get(roundPath(roomId, get(roomPath(roomId)).data.currentRoundId)).data.phase == 'DISCUSSION'
+          && request.auth.uid in get(roundPath(roomId, get(roomPath(roomId)).data.currentRoundId)).data.alive
+          && !(request.auth.uid in get(roundPath(roomId, get(roomPath(roomId)).data.currentRoundId)).data.left);
+        allow update, delete: if false;
+      }
+
+      // Spectator emoji reactions: eliminated players only, fixed emoji list, one every 2 seconds, host can switch off.
+      match /reactions/{uid} {
+        allow read: if isMember(roomId);
+        allow create, update: if isOwner(uid) && isMember(roomId)
+          && request.resource.data.keys().hasOnly(['uid', 'emoji', 'at'])
+          && request.resource.data.uid == uid
+          && request.resource.data.at == request.time
+          && request.resource.data.emoji in ['😂', '😱', '👀', '🔥', '👏', '💀', '🤔', '😈']
+          && get(roomPath(roomId)).data.status == 'IN_GAME'
+          && get(roomPath(roomId)).data.settings.reactions != false
+          && !(uid in get(roundPath(roomId, get(roomPath(roomId)).data.currentRoundId)).data.alive)
+          && (resource == null || request.time > resource.data.at + duration.value(2, 's'));
+        allow delete: if false;
+      }
+
       // Real words, custom words and the role map: host only.
       match /secrets/{doc} {
         allow read, write: if isHost(roomId);
@@ -244,6 +287,23 @@ service cloud.firestore {
             && request.resource.data.targetUids.hasOnly(get(roundPath(roomId, roundId)).data.voteCandidates)
             && request.auth.uid in get(roundPath(roomId, roundId)).data.alive
             && !(request.auth.uid in get(roundPath(roomId, roundId)).data.left);
+          allow update, delete: if false;
+        }
+
+        // Private final word guesses: only the author and the host can read them. One per eligible
+        // player (create-only), only while the GUESS phase is open and before its deadline.
+        match /guesses/{uid} {
+          allow get: if isHost(roomId) || isOwner(uid);
+          allow list: if isHost(roomId);
+          allow create: if isOwner(uid) && isMember(roomId)
+            && request.resource.data.keys().hasOnly(['uid', 'guess', 'submittedAt'])
+            && request.resource.data.uid == uid
+            && request.resource.data.submittedAt == request.time
+            && request.resource.data.guess is string
+            && request.resource.data.guess.size() >= 1 && request.resource.data.guess.size() <= 40
+            && get(roundPath(roomId, roundId)).data.phase == 'GUESS'
+            && uid in get(roundPath(roomId, roundId)).data.guessers
+            && request.time <= get(roundPath(roomId, roundId)).data.guessEndsAt;
           allow update, delete: if false;
         }
 

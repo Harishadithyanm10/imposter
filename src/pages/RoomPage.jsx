@@ -15,9 +15,10 @@ import RoleRevealPage from './RoleRevealPage.jsx';
 import CluePhasePage from './CluePhasePage.jsx';
 import DiscussionPage from './DiscussionPage.jsx';
 import VotingPage from './VotingPage.jsx';
+import GuessPage from './GuessPage.jsx';
 import ResultsPage from './ResultsPage.jsx';
 
-const PHASES = { WAITING: LobbyPage, ROLE_REVEAL: RoleRevealPage, CLUE: CluePhasePage, DISCUSSION: DiscussionPage, VOTING: VotingPage, RESULT: ResultsPage };
+const PHASES = { WAITING: LobbyPage, ROLE_REVEAL: RoleRevealPage, CLUE: CluePhasePage, DISCUSSION: DiscussionPage, VOTING: VotingPage, GUESS: GuessPage, RESULT: ResultsPage };
 
 function Notice({ title, children }) {
   const navigate = useNavigate();

@@ -59,3 +59,14 @@ test('subRounds defaults to 3 and must be 1-5', () => {
   assert.throws(() => v.validateSettings({ ...base, subRounds: 6 }));
   assert.throws(() => v.validateSettings({ ...base, subRounds: 0 }));
 });
+
+test('special rules default to OFF (reactions ON) and validate player counts', () => {
+  const d = v.validateSettings(base).settings;
+  assert.deepEqual([d.mrWhite, d.lastStand, d.extraHint, d.randomEvents, d.reactions, d.guessTimer], [false, false, false, false, true, 15]);
+  const on = v.validateSettings({ ...base, maxPlayers: 8, imposters: 1, mrWhite: true, lastStand: true, extraHint: true, randomEvents: true, reactions: false, guessTimer: 20 }).settings;
+  assert.deepEqual([on.mrWhite, on.lastStand, on.extraHint, on.randomEvents, on.reactions, on.guessTimer], [true, true, true, true, false, 20]);
+  assert.throws(() => v.validateSettings({ ...base, maxPlayers: 4, imposters: 1, mrWhite: true })); // 2 hidden of 4
+  assert.throws(() => v.validateSettings({ ...base, maxPlayers: 8, imposters: 3, mrWhite: true })); // 4 hidden of 8
+  assert.throws(() => v.validateSettings({ ...base, guessTimer: 2 }));
+  assert.throws(() => v.validateSettings({ ...base, guessTimer: 99 }));
+});

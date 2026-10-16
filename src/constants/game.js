@@ -16,7 +16,7 @@ export const DIFFICULTIES = [
 ];
 export const DEFAULT_SETTINGS = {
   roomName: '', maxPlayers: 8, imposters: 1, rounds: 3, subRounds: 3, clueTimer: 30, discussionTimer: 120, votingTimer: 45,
-  typedClues: false, gameMode: 'CLASSIC', category: 'RANDOM', difficulty: 'ANY', customWord: '', customImposterWord: '', hasCustomWords: false,
+  typedClues: false, mrWhite: false, lastStand: false, extraHint: false, randomEvents: false, reactions: true, guessTimer: 15, gameMode: 'CLASSIC', category: 'RANDOM', difficulty: 'ANY', customWord: '', customImposterWord: '', hasCustomWords: false,
 };
 // Mirrors the server rule so the UI can guide hosts. The server is the authority.
 export const MAX_PLAYERS = 30;

@@ -32,13 +32,15 @@ export default function VotingPage() {
 
   const subtitle = revote
     ? `Tie for the last ${slots > 1 ? 'spots' : 'spot'}. Pick ${slots} of the tied players.`
-    : slots > 1 ? `${slots} imposters are still hiding. Pick ${slots} different players.` : 'One imposter is still hiding. Who is it? Votes stay secret until everyone has voted.';
+    : room.settings.mrWhite
+      ? (slots > 1 ? `${slots} hidden players (imposters and Mr. White) are still in. Pick ${slots} different players.` : 'One hidden player is still in. Who is it? Votes stay secret until everyone has voted.')
+      : (slots > 1 ? `${slots} imposters are still hiding. Pick ${slots} different players.` : 'One imposter is still hiding. Who is it? Votes stay secret until everyone has voted.');
 
   return (
     <div>
       <PhaseHeader title={revote ? 'Revote' : 'Vote'} total={room.settings.votingTimer} subtitle={subtitle} />
-      <div className="grid gap-4 lg:grid-cols-[1fr_20rem] lg:gap-6">
-        <section>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6">
+        <section className="min-w-0">
           {canVote && (
             <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-300">
               <span className="font-semibold text-ink-100">Your picks {picks.length}/{slots}</span>
@@ -70,7 +72,7 @@ export default function VotingPage() {
                 </Button>}
           </div>
         </section>
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <Card className="!p-4">
             <p className="text-sm text-ink-400">Votes cast</p>
             <p className="font-display text-3xl font-bold tabular-nums">{round.voted.length}<span className="text-ink-400">/{alive.length}</span></p>

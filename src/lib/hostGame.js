@@ -13,6 +13,7 @@ const REVEAL_MS = 30_000;
 const OFFLINE_SKIP_MS = 10_000;
 const GRACE_MS = 1500;
 const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
+const EVENT_INTRO_MS = 3000; // extra seconds on the first turn so nobody loses time to the event announcement
 
 const ts = (ms) => Timestamp.fromMillis(ms);
 export const toMs = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : 0);
@@ -21,21 +22,24 @@ const roomRef = (roomId) => doc(db, 'rooms', roomId);
 const roundRefOf = (roomId, roundId) => doc(db, 'rooms', roomId, 'rounds', roundId);
 const secretsRef = (roomId, id) => doc(db, 'rooms', roomId, 'secrets', id);
 
-function cluePhaseFields({ alive, left }, settings, now) {
-  const endsAt = ts(now + settings.clueTimer * 1000);
+/** `order` (optional) is a preset speaking order (Reverse Order); `event` is the active random event, if any. */
+function cluePhaseFields({ alive, left }, settings, now, { order = null, event = null } = {}) {
+  const living = alive.filter((u) => !left.includes(u));
+  const endsAt = ts(now + (event ? EVENT_INTRO_MS : 0) + engine.clueSeconds(settings, event?.type) * 1000);
+  const turnOrder = order ? [...order.filter((u) => living.includes(u)), ...living.filter((u) => !order.includes(u))] : shuffle(living);
   return {
-    phase: 'CLUE', turnOrder: shuffle(alive.filter((u) => !left.includes(u))), currentTurnIndex: 0,
+    phase: 'CLUE', turnOrder, currentTurnIndex: 0, event: event || null,
     turnStartedAt: ts(now), turnEndsAt: endsAt, phaseEndsAt: endsAt, voted: [], voteCandidates: [], voteAttempt: 1, voteSlots: 1, pendingElim: [], firstCounts: null,
   };
 }
 
-function newRoundData({ matchId, cycle, alive, left = [], players, settings, phase, now }) {
+function newRoundData({ matchId, cycle, alive, left = [], players, settings, phase, now, clueOpts }) {
   const base = {
     matchId, cycle, phase, alive, left, players, voted: [], voteAttempt: 1, voteCandidates: [], voteSlots: 1, pendingElim: [], firstCounts: null,
-    turnOrder: [], currentTurnIndex: 0, result: null, createdAt: serverTimestamp(),
+    turnOrder: [], currentTurnIndex: 0, event: null, result: null, createdAt: serverTimestamp(),
   };
   if (phase === 'ROLE_REVEAL') return { ...base, phaseEndsAt: ts(now + REVEAL_MS) };
-  return { ...base, ...cluePhaseFields({ alive, left }, settings, now) };
+  return { ...base, ...cluePhaseFields({ alive, left }, settings, now, clueOpts) };
 }
 
 /** Deal a brand-new match (fresh roles and words). Runs inside a transaction, writes only. */
@@ -45,8 +49,10 @@ function beginMatchTx(tx, { roomId, room, members, config, meta, now, wordSource
   const uids = members.map((m) => m.id);
   const n = uids.length;
   if (n < 3) throw new Error('At least 3 players are needed to play.');
-  if (settings.imposters > engine.maxImposters(n)) {
-    throw new Error(`With ${n} players you can have at most ${engine.maxImposters(n)} imposter(s). Lower the imposter count in settings.`);
+  const mrWhite = settings.mrWhite === true;
+  if (!engine.rolesFit(n, settings.imposters, mrWhite)) {
+    const need = 2 * (settings.imposters + (mrWhite ? 1 : 0)) + 1;
+    throw new Error(`${settings.imposters} imposter(s)${mrWhite ? ' plus Mr. White' : ''} needs at least ${need} players so the crew stays the majority. Lower the imposters${mrWhite ? ', turn off Mr. White' : ''} or wait for more players.`);
   }
   // The crew all get the same word. The imposter only ever gets a vague CLUE about that word
   // (never a different/opposite word), plus the topic, and has to bluff from it.
@@ -59,22 +65,29 @@ function beginMatchTx(tx, { roomId, room, members, config, meta, now, wordSource
     ({ word, hint, category } = picked); topic = picked.categoryLabel; wordId = picked.id;
   }
   const imposterWord = hint;
-  const imposters = shuffle(uids).slice(0, settings.imposters); // CSPRNG shuffle
+  const shuffled = shuffle(uids); // CSPRNG shuffle
+  const imposters = shuffled.slice(0, settings.imposters);
+  const whiteUid = mrWhite ? shuffled[settings.imposters] : null; // Mr. White: no word, no clue
   const roles = {};
-  uids.forEach((u) => { roles[u] = imposters.includes(u) ? 'IMPOSTER' : 'NORMAL'; });
+  uids.forEach((u) => { roles[u] = imposters.includes(u) ? 'IMPOSTER' : u === whiteUid ? 'WHITE' : 'NORMAL'; });
   const players = {};
   members.forEach((m) => { players[m.id] = { displayName: m.displayName, avatar: m.avatar || 'violet' }; });
 
   const rRef = roomRef(roomId);
   const roundRef = doc(collection(rRef, 'rounds'));
   const matchId = doc(collection(rRef, 'secrets')).id;
-  tx.set(secretsRef(roomId, matchId), { matchId, word, imposterWord, hint, category, topic, wordId, mode: settings.gameMode, roles, imposters });
+  tx.set(secretsRef(roomId, matchId), { matchId, word, imposterWord, hint, category, topic, wordId, mode: settings.gameMode, roles, imposters, mrWhite: whiteUid });
   uids.forEach((u) => {
-    const isImp = roles[u] === 'IMPOSTER';
+    const r = roles[u];
     tx.set(doc(rRef, 'privateRoles', u), {
-      uid: u, role: roles[u], matchId, roundId: roundRef.id, secretWord: isImp ? hint : word, isClue: isImp, topic,
+      uid: u, role: r, matchId, roundId: roundRef.id, secretWord: r === 'IMPOSTER' ? hint : r === 'WHITE' ? '' : word,
+      isClue: r === 'IMPOSTER', isWhite: r === 'WHITE', topic,
     });
   });
+  // "One More Hint": written now, but Security Rules only let the imposter read it AFTER they activate the ability.
+  if (settings.extraHint === true) {
+    imposters.forEach((u) => tx.set(doc(rRef, 'extraHints', u), { uid: u, matchId, text: engine.buildExtraHint(word) }));
+  }
   tx.set(roundRef, newRoundData({ matchId, cycle: 1, alive: uids, players, settings, phase: 'ROLE_REVEAL', now }));
   tx.update(rRef, {
     status: 'IN_GAME', currentPhase: 'ROLE_REVEAL', currentRoundId: roundRef.id, matchId, currentRound: 1,
@@ -117,11 +130,15 @@ export async function nextRound(roomId, members) {
     }
     const rRef = roomRef(roomId);
     const roundRef = doc(collection(rRef, 'rounds'));
+    // Random event between sub-rounds: at most one, never the same one twice in a row, expires with the sub-round.
+    const type = room.settings.randomEvents === true ? engine.pickEvent({ last: room.lastEvent || null }) : null;
+    const event = type ? { type } : null;
+    const order = type === 'REVERSE' ? [...round.turnOrder].reverse() : null; // everyone sees the same flipped order
     tx.set(roundRef, newRoundData({
       matchId: round.matchId, cycle: round.cycle + 1, alive: round.alive.filter((u) => !round.left.includes(u)),
-      left: round.left, players: round.players, settings: room.settings, phase: 'CLUE', now,
+      left: round.left, players: round.players, settings: room.settings, phase: 'CLUE', now, clueOpts: { order, event },
     }));
-    tx.update(rRef, { currentRoundId: roundRef.id, currentPhase: 'CLUE', currentRound: round.cycle + 1 });
+    tx.update(rRef, { currentRoundId: roundRef.id, currentPhase: 'CLUE', currentRound: round.cycle + 1, lastEvent: type || deleteField() });
   });
 }
 
@@ -149,7 +166,7 @@ function finishMatchTx(tx, c, { alive, left, win, base }) {
     eliminated: [], eliminatedUid: null, eliminatedRole: null, caught: 0, counts: {}, revoteCounts: null, tie: false, attempt: 1,
     ...base, matchOver: true, winner: win.winner, reason: win.reason, subRound: round.cycle,
     gameRound, gameOver: gameRound >= room.settings.rounds, scores,
-    imposters: secrets.imposters, word: secrets.word, mode: secrets.mode,
+    imposters: secrets.imposters, mrWhite: secrets.mrWhite || null, topic: secrets.topic || null, word: secrets.word, mode: secrets.mode,
     imposterWord: secrets.hint || secrets.imposterWord,
   };
   tx.update(c.roundRef, { phase: 'RESULT', alive, left, result, phaseEndsAt: deleteField() });
@@ -161,7 +178,7 @@ function advanceTurnTx(tx, c, now) {
   const { round, room } = c;
   const next = round.currentTurnIndex + 1;
   if (next < round.turnOrder.length) {
-    const endsAt = ts(now + room.settings.clueTimer * 1000);
+    const endsAt = ts(now + engine.clueSeconds(room.settings, round.event?.type) * 1000);
     tx.update(c.roundRef, { currentTurnIndex: next, turnStartedAt: ts(now), turnEndsAt: endsAt, phaseEndsAt: endsAt });
   } else {
     tx.update(c.roundRef, { phase: 'DISCUSSION', phaseEndsAt: ts(now + room.settings.discussionTimer * 1000) });
@@ -222,7 +239,7 @@ const closeVoting = (roomId, attempt, votes, voted) =>
     }
     const alive = round.alive.filter((u) => !res.eliminated.includes(u));
     const eliminated = res.eliminated.map((u) => ({ uid: u, role: secrets.roles[u] }));
-    const caught = eliminated.filter((e) => e.role === 'IMPOSTER').length;
+    const caught = eliminated.filter((e) => engine.isHidden(e.role)).length;
     const base = {
       eliminated, eliminatedUid: eliminated[0]?.uid ?? null, eliminatedRole: eliminated[0]?.role ?? null, caught,
       counts: round.firstCounts || tally.counts, revoteCounts: round.firstCounts ? tally.counts : null,
@@ -232,8 +249,51 @@ const closeVoting = (roomId, attempt, votes, voted) =>
     base.impostersLeft = sides.imposters; // imposters still hiding (public: caught ones are revealed)
     const subRounds = room.settings.subRounds ?? 3;
     const win = engine.evaluateWin({ ...sides, cycle: round.cycle, maxCycles: subRounds });
+
+    // Final word guess: an eliminated Mr. White (always) or imposter (Last Stand option) gets ONE private,
+    // timed guess before the outcome is decided, unless the hidden team has already won anyway.
+    const guessers = eliminated.filter((e) => e.role === 'WHITE' || (e.role === 'IMPOSTER' && room.settings.lastStand === true)).map((e) => e.uid);
+    if (guessers.length && win?.winner !== 'IMPOSTER') {
+      const endsAt = ts(now + (room.settings.guessTimer ?? 15) * 1000);
+      tx.update(c.roundRef, {
+        phase: 'GUESS', guessers, guessEndsAt: endsAt, phaseEndsAt: endsAt, pendingEliminated: res.eliminated, voted,
+        pendingBase: { counts: base.counts, revoteCounts: base.revoteCounts, tie: base.tie, attempt: base.attempt, subRound: base.subRound },
+      });
+      tx.update(c.roomRef, { currentPhase: 'GUESS' });
+      return;
+    }
     if (win) { finishMatchTx(tx, c, { alive, left: round.left, win, base }); return; }
     tx.update(c.roundRef, { phase: 'RESULT', alive, result: base, voted, phaseEndsAt: deleteField() });
+    tx.update(c.roomRef, { currentPhase: 'RESULT' });
+  });
+
+/**
+ * Judge the private final guesses (host only reads them). One guess per eligible player, exactly one
+ * outcome: if any guess is correct the hidden team wins the round; otherwise the normal result stands.
+ * Guarded by the GUESS phase check, so a second run can never award the round twice.
+ */
+const resolveGuess = (roomId, guesses) =>
+  withRound(roomId, { phase: 'GUESS', withSecrets: true }, (tx, c) => {
+    const { round, room, secrets } = c;
+    const eligible = new Set(round.guessers || []);
+    const out = engine.resolveGuesses(guesses.filter((g) => eligible.has(g.uid)), secrets.word);
+    const gone = round.pendingEliminated || [];
+    const alive = round.alive.filter((u) => !gone.includes(u));
+    const eliminated = gone.map((u) => ({ uid: u, role: secrets.roles[u] }));
+    const sides = engine.countSides(alive, secrets.roles, round.left);
+    const base = {
+      counts: {}, revoteCounts: null, tie: false, attempt: 1, subRound: round.cycle, ...(round.pendingBase || {}),
+      eliminated, eliminatedUid: eliminated[0]?.uid ?? null, eliminatedRole: eliminated[0]?.role ?? null,
+      caught: eliminated.filter((e) => engine.isHidden(e.role)).length, matchOver: false, impostersLeft: sides.imposters, guesses: out.entries,
+    };
+    if (out.winnerUid) {
+      const who = round.players?.[out.winnerUid]?.displayName || 'A player';
+      finishMatchTx(tx, c, { alive, left: round.left, base, win: { winner: 'IMPOSTER', reason: `${who} guessed the secret word “${secrets.word}” with a last-stand guess! The hidden team steals the round.` } });
+      return;
+    }
+    const win = engine.evaluateWin({ ...sides, cycle: round.cycle, maxCycles: room.settings.subRounds ?? 3 });
+    if (win) { finishMatchTx(tx, c, { alive, left: round.left, win, base }); return; }
+    tx.update(c.roundRef, { phase: 'RESULT', alive, result: base, phaseEndsAt: deleteField() });
     tx.update(c.roomRef, { currentPhase: 'RESULT' });
   });
 
@@ -256,7 +316,7 @@ export const hostEndDiscussion = (roomId) => startVoting(roomId);
  * one transition. Called every second and whenever state changes (see hooks/useHostEngine.js).
  */
 export async function engineStep(roomId, s) {
-  const { room, round, members, membersLoaded, clues, votes, acks, presence } = s;
+  const { room, round, members, membersLoaded, clues, votes, guesses = [], acks, presence } = s;
   if (!membersLoaded || !room || room.status !== 'IN_GAME' || !round || round.id !== room.currentRoundId || round.result?.matchOver) return;
   const now = Date.now();
   const ids = new Set(members.map((m) => m.id));
@@ -280,5 +340,9 @@ export async function engineStep(roomId, s) {
     const voted = [...new Set(attemptVotes.map((v) => v.uid))];
     if (engine.allVoted(alive, voted) || now >= toMs(round.phaseEndsAt) + GRACE_MS) await closeVoting(roomId, round.voteAttempt, attemptVotes, voted);
     else if (voted.length !== round.voted.length || voted.some((u) => !round.voted.includes(u))) await syncVoted(roomId, round.voteAttempt, voted);
+  } else if (round.phase === 'GUESS') {
+    const sent = new Set(guesses.map((g) => g.uid));
+    const everyone = (round.guessers || []).every((u) => sent.has(u) || round.left.includes(u) || !ids.has(u));
+    if (everyone || now >= toMs(round.guessEndsAt) + GRACE_MS) await resolveGuess(roomId, guesses);
   }
 }

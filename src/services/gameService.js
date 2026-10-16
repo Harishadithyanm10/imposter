@@ -28,6 +28,31 @@ export async function markSpoke(roomId, roundId, uid, turnIndex) {
 }
 
 /** One vote document per player per attempt, naming one player for each imposter in the game. */
+/** One private final guess at the secret word. Rules: eligible players only, once, before the deadline. */
+export async function submitGuess(roomId, roundId, uid, text) {
+  const guess = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!guess) throw new Error('Type your guess first.');
+  if (guess.length > 40) throw new Error('Guesses are at most 40 characters.');
+  try {
+    await setDoc(doc(db, 'rooms', roomId, 'rounds', roundId, 'guesses', uid), { uid, guess, submittedAt: serverTimestamp() });
+  } catch (e) { denied(e, 'Your guess was not accepted. You may have already guessed, or time is up.'); }
+}
+
+/** "One More Hint": creates the one-per-match record that unlocks the imposter's private hint. */
+export async function activateExtraHint(roomId, matchId, uid) {
+  try {
+    await setDoc(doc(db, 'rooms', roomId, 'abilityUse', `${matchId}_${uid}`), { uid, matchId, usedAt: serverTimestamp() });
+  } catch (e) { denied(e, 'You can only use this ability once per round, during the discussion.'); }
+}
+
+export const REACTIONS = ['😂', '😱', '👀', '🔥', '👏', '💀', '🤔', '😈'];
+export async function sendReaction(roomId, uid, emoji) {
+  if (!REACTIONS.includes(emoji)) return;
+  try {
+    await setDoc(doc(db, 'rooms', roomId, 'reactions', uid), { uid, emoji, at: serverTimestamp() });
+  } catch (e) { denied(e, 'Slow down a little, reactions are limited.'); }
+}
+
 export async function submitVote(roomId, roundId, uid, attempt, targetUids) {
   const picks = [...new Set(Array.isArray(targetUids) ? targetUids : [targetUids])];
   if (!picks.length) throw new Error('Pick at least one player.');

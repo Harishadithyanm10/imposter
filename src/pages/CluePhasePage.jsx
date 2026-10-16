@@ -5,11 +5,13 @@ import Button from '../components/common/Button.jsx';
 import Card from '../components/common/Card.jsx';
 import Input from '../components/common/Input.jsx';
 import PhaseHeader from '../components/game/PhaseHeader.jsx';
-import MyWord from '../components/game/MyWord.jsx';
+import MyWord from '../components/game/Myword.jsx';
 import { useRoom } from '../contexts/RoomContext.jsx';
 import { useAsyncAction } from '../hooks/useAsyncAction.js';
 import { markSpoke, submitClue, SPOKE_MARK } from '../services/gameService.js';
 import { hostSkipTurn } from '../lib/hostGame.js';
+import EventSplash, { EventChip } from '../components/game/EventSplash.jsx';
+import { clueSeconds } from '../lib/engine.js';
 import { cx } from '../utils/cx.js';
 
 export default function CluePhasePage() {
@@ -36,10 +38,12 @@ export default function CluePhasePage() {
   const subtitle = myTurn ? (typed ? 'Your turn. Give one short clue.' : 'Your turn. Say a clue out loud.') : `${current.displayName} is ${typed ? 'thinking…' : 'speaking…'}`;
 
   return (
-    <div className="min-w-0 overflow-x-clip">
-      <PhaseHeader title="Clue time" subtitle={subtitle} total={room.settings.clueTimer} />
-      <div className="grid gap-4 lg:grid-cols-[1fr_20rem] lg:gap-6">
-        <section className="order-2 space-y-4 lg:order-1">
+    <div className="min-w-0">
+      {round.event && <EventSplash type={round.event.type} roundId={round.id} />}
+      <PhaseHeader title="Clue time" subtitle={subtitle} total={clueSeconds(room.settings, round.event?.type)} />
+      {round.event && <div className="mb-3"><EventChip type={round.event.type} /></div>}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6">
+        <section className="order-2 min-w-0 space-y-4 lg:order-1">
           {myTurn && (
             <div className="scroll-mt-28">
               <Card className="border-brand-500/50 ring-2 ring-brand-500/20">
@@ -62,29 +66,32 @@ export default function CluePhasePage() {
             </div>
           )}
           <Card>
-            <h2 className="mb-3 text-lg font-bold">Speaking order</h2>
+            <h2 className="mb-3 text-lg font-bold">Speaking order{round.event?.type === 'REVERSE' && <span className="ml-2 text-sm font-semibold text-sky-300">(reversed)</span>}</h2>
             <ol className="space-y-2">
               {round.turnOrder.map((u, i) => {
                 const p = playerOf(u); const done = byUid[u]; const active = i === round.currentTurnIndex;
                 const spoke = done && (done.clue === SPOKE_MARK || (!typed && done.skipped));
                 return (
-                  <li key={u} aria-current={active ? 'step' : undefined} className={cx('flex items-start gap-3 rounded-2xl px-3 py-2.5 sm:items-center sm:px-4 sm:py-3', active ? 'bg-brand-600/20 ring-1 ring-brand-500/60' : 'bg-ink-800/60')}>
-                    <span className="w-5 shrink-0 pt-2 text-center text-xs font-bold text-ink-400 sm:pt-0">{i + 1}</span>
+                  <li key={u} aria-current={active ? 'step' : undefined} className={cx('flex items-start gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3', active ? 'bg-brand-600/20 ring-1 ring-brand-500/60' : 'bg-ink-800/60')}>
+                    <span className="w-5 shrink-0 pt-2 text-center text-xs font-bold text-ink-400">{i + 1}</span>
                     <Avatar name={p.displayName} avatar={p.avatar} size="sm" />
-                    <span className="min-w-0 flex-1 truncate font-semibold">{p.displayName}{u === uid && ' (you)'}</span>
-                    <span className="flex min-w-0 max-w-[50%] shrink items-center justify-end gap-1.5 text-right text-sm">
-                      {done ? (spoke ? <><Check className="h-4 w-4 text-emerald-400" aria-hidden /><span className="text-ink-300">done</span></>
-                        : done.skipped ? <span className="italic text-ink-400">skipped</span>
-                        : <><Check className="h-4 w-4 text-emerald-400" aria-hidden /><span className="min-w-0 break-words font-display text-base font-bold sm:text-lg">{done.clue}</span></>)
-                        : active ? <span className="text-brand-300">{typed ? 'giving clue…' : 'speaking…'}</span> : <span className="text-ink-400">waiting</span>}
-                    </span>
+                    {/* on phones the player's word/clue sits UNDER their name; on wider screens it moves to the right */}
+                    <div className="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between sm:gap-3">
+                      <p className="truncate font-semibold">{p.displayName}{u === uid && ' (you)'}</p>
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm sm:mt-0 sm:max-w-[55%] sm:justify-end sm:text-right">
+                        {done ? (spoke ? <><Check className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden /><span className="text-ink-300">done</span></>
+                          : done.skipped ? <span className="italic text-ink-400">skipped</span>
+                            : <><Check className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden /><span className="min-w-0 break-words font-display text-base font-bold sm:text-lg">{done.clue}</span></>)
+                          : active ? <span className="text-brand-300">{typed ? 'giving clue…' : 'speaking…'}</span> : <span className="text-ink-400">waiting</span>}
+                      </p>
+                    </div>
                   </li>
                 );
               })}
             </ol>
           </Card>
         </section>
-        <aside className="order-1 space-y-3 lg:order-2">
+        <aside className="order-1 min-w-0 space-y-3 lg:order-2">
           <MyWord />
           {!isAlive && <p className="rounded-2xl bg-ink-800 p-4 text-sm text-ink-300">You were voted out. You can keep watching.</p>}
           {isHost && <Button variant="secondary" className="w-full" loading={busy} onClick={() => run(() => hostSkipTurn(roomId, round.currentTurnIndex, currentUid))}><SkipForward className="h-4 w-4" />{typed ? `Skip ${current.displayName}’s turn` : 'Next speaker'}</Button>}

@@ -110,6 +110,17 @@ export default function HowToPlayPage() {
           </Card>
         </Section>
 
+        <Section id="special" title="Special rules (host options)">
+          <p className="mb-3 text-ink-300">The host can switch these on in the room settings. They are all off by default (except spectator reactions).</p>
+          <div className="space-y-3">
+            <Card className="!p-4"><p className="font-bold text-slate-200">Mr. White</p><p className="mt-1 text-sm text-ink-300">One extra hidden player gets no word and no clue, only the topic. They join the clues, discussion and votes like everyone else. They count as part of the hidden team, so the crew must catch every imposter AND Mr. White. If Mr. White is voted out they get one private guess at the secret word: a correct guess wins the round for the hidden team. It needs at least 5 players so the crew stays the majority.</p></Card>
+            <Card className="!p-4"><p className="font-bold text-hot-400">Last stand</p><p className="mt-1 text-sm text-ink-300">An imposter who is voted out gets one private, timed guess (15 seconds by default) at the secret word. Guesses are not case sensitive. If any eliminated imposter guesses right, the imposters win the round even if they were all caught. A wrong guess changes nothing.</p></Card>
+            <Card className="!p-4"><p className="font-bold text-hot-400">One more hint</p><p className="mt-1 text-sm text-ink-300">During the discussion, each imposter can use this once per round to reveal an extra private hint: the first letter and the length of the secret word. Only that imposter ever sees it.</p></Card>
+            <Card className="!p-4"><p className="font-bold text-sky-300">Random events</p><p className="mt-1 text-sm text-ink-300">Between sub-rounds there may be a surprise, announced on screen: <strong className="text-ink-100">Reverse Order</strong> flips the speaking order, <strong className="text-ink-100">Panic Mode</strong> halves the clue time (minimum 5 seconds). One at a time, never the same event twice in a row, and it ends with that sub-round.</p></Card>
+            <Card className="!p-4"><p className="font-bold">Spectator reactions</p><p className="mt-1 text-sm text-ink-300">Once you are voted out you watch the rest of the round and can send emoji reactions (one every 2 seconds). Reactions never show any secret information.</p></Card>
+          </div>
+        </Section>
+
         <Section id="tips" title="Tips">
           <div className="grid gap-3 sm:grid-cols-2">
             <Card className="!p-4"><p className="font-bold text-emerald-300">If you are crew</p><ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-ink-300"><li>Give a clue that fits the word but does not make it obvious.</li><li>Watch for clues that are too vague or copy someone else.</li><li>Use every sub-round: your first vote is rarely your last chance.</li></ul></Card>

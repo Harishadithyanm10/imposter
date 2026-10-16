@@ -70,7 +70,7 @@ export async function recordResult({ roomId, uid, roomName, round, role }) {
   await runTransaction(db, async (tx) => {
     const [h, u] = [await tx.get(hRef), await tx.get(uRef)];
     if (h.exists() || !u.exists()) return;
-    const won = (role === 'IMPOSTER') === (round.result.winner === 'IMPOSTER');
+    const won = (role === 'IMPOSTER' || role === 'WHITE') === (round.result.winner === 'IMPOSTER'); // Mr. White is on the hidden team
     tx.set(hRef, {
       matchId, roomId, roundId: round.id, roomName, completedAt: serverTimestamp(),
       role, won, rounds: round.cycle, winner: round.result.winner, reason: round.result.reason,

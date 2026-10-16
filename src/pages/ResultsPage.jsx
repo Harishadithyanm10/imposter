@@ -7,6 +7,8 @@ import Button from '../components/common/Button.jsx';
 import Card from '../components/common/Card.jsx';
 import { ConfirmDialog } from '../components/common/Modal.jsx';
 import EjectionScene from '../components/game/EjectionScene.jsx';
+import Confetti from '../components/game/Confetti.jsx';
+import { isHidden } from '../lib/engine.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useRoom } from '../contexts/RoomContext.jsx';
 import { useAsyncAction } from '../hooks/useAsyncAction.js';
@@ -34,7 +36,7 @@ function Counts({ title, counts, playerOf }) {
 }
 
 export default function ResultsPage() {
-  const { roomId, room, round, uid, isHost, playerOf, members } = useRoom();
+  const { roomId, room, round, uid, isHost, playerOf, members, role } = useRoom();
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [run, busy] = useAsyncAction();
@@ -54,6 +56,8 @@ export default function ResultsPage() {
   const scene = eliminated.map((e) => ({ name: playerOf(e.uid).displayName, avatar: playerOf(e.uid).avatar, role: e.role }));
   const scores = r.scores || room.scores || { crew: 0, imposters: 0 };
   const title = r.gameOver ? 'Game over' : r.matchOver ? (r.winner === 'NORMAL' ? 'The crew wins this round' : 'The imposters win this round') : `Sub-round ${round.cycle} result`;
+  const hiddenWord = room.settings.mrWhite ? 'hidden player' : 'imposter';
+  const iWon = r.matchOver && role && (isHidden(role.role) === (r.winner === 'IMPOSTER'));
   const nextLabel = !r.matchOver ? `Next sub-round (${round.cycle + 1}/${subRounds})` : `Next round (${gameRound + 1}/${room.settings.rounds})`;
   const overall = scores.crew === scores.imposters ? 'It is a draw!' : scores.crew > scores.imposters ? 'The crew wins the game!' : 'The imposters win the game!';
 
@@ -62,6 +66,7 @@ export default function ResultsPage() {
       <AnimatePresence>
         {!animDone && <EjectionScene items={scene} remaining={remaining} onDone={() => setAnimDone(true)} />}
       </AnimatePresence>
+      {animDone && iWon && <Confetti tint={undefined} />}
 
       <div>
         <p className="text-sm font-semibold text-brand-300">Round {gameRound}/{room.settings.rounds} · Sub-round {round.cycle}/{subRounds}</p>
@@ -82,7 +87,7 @@ export default function ResultsPage() {
                       <Avatar name={p.displayName} avatar={p.avatar} size="lg" />
                       <div className="min-w-0">
                         <p className="truncate font-display text-xl font-bold sm:text-2xl">{p.displayName}</p>
-                        <p className={e.role === 'IMPOSTER' ? 'font-semibold text-emerald-300' : 'font-semibold text-hot-400'}>{e.role === 'IMPOSTER' ? 'Was an imposter!' : 'Was NOT an imposter.'}</p>
+                        <p className={isHidden(e.role) ? 'font-semibold text-emerald-300' : 'font-semibold text-hot-400'}>{e.role === 'WHITE' ? 'Was Mr. White!' : e.role === 'IMPOSTER' ? 'Was an imposter!' : 'Was NOT an imposter.'}</p>
                       </div>
                     </li>
                   );
@@ -95,10 +100,25 @@ export default function ResultsPage() {
         </Card>
       </motion.div>
 
+      {r.guesses?.length > 0 && (
+        <Card>
+          <h2 className="mb-3 text-lg font-bold">Last-stand guesses</h2>
+          <ul className="space-y-2">
+            {r.guesses.map((g, k) => (
+              <motion.li key={g.uid} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 * k }}
+                className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 ${g.correct ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-ink-800/70'}`}>
+                <span className="min-w-0 truncate font-semibold">{playerOf(g.uid).displayName}</span>
+                <span className={`min-w-0 break-words text-right ${g.correct ? 'font-bold text-emerald-300' : 'text-ink-300'}`}>“{g.guess}” {g.correct ? '✓ correct!' : '✗ wrong'}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {!r.matchOver && (
         <Card className="!p-4">
-          <p className="font-semibold">{r.caught > 0 ? `${r.caught} imposter${r.caught > 1 ? 's' : ''} caught, but ${remaining} ${remaining === 1 ? 'is' : 'are'} still hiding.` : 'No imposter was caught.'}</p>
-          <p className="mt-1 text-sm text-ink-300">The same word continues. Eliminated players now watch as spectators. The crew only wins once <strong className="text-ink-100">every</strong> imposter is caught, and there {subRounds - round.cycle === 1 ? 'is' : 'are'} {subRounds - round.cycle} sub-round{subRounds - round.cycle === 1 ? '' : 's'} left to do it.</p>
+          <p className="font-semibold">{r.caught > 0 ? `${r.caught} ${hiddenWord}${r.caught > 1 ? 's' : ''} caught, but ${remaining} ${remaining === 1 ? 'is' : 'are'} still hiding.` : `No ${hiddenWord} was caught.`}</p>
+          <p className="mt-1 text-sm text-ink-300">The same word continues. Eliminated players now watch as spectators. The crew only wins once <strong className="text-ink-100">every</strong> {hiddenWord} is caught, and there {subRounds - round.cycle === 1 ? 'is' : 'are'} {subRounds - round.cycle} sub-round{subRounds - round.cycle === 1 ? '' : 's'} left to do it.</p>
         </Card>
       )}
 
@@ -109,9 +129,13 @@ export default function ResultsPage() {
         <Card>
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Skull className="h-5 w-5 text-hot-400" aria-hidden />The reveal</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div><p className="text-sm text-ink-400">Imposter{r.imposters.length > 1 ? 's' : ''}</p>
-              <ul className="mt-1 space-y-1">{r.imposters.map((u) => <li key={u} className="font-semibold text-hot-400">{playerOf(u).displayName}</li>)}</ul></div>
+            <div><p className="text-sm text-ink-400">Imposter{r.imposters.length > 1 ? 's' : ''}{r.mrWhite ? ' and Mr. White' : ''}</p>
+              <ul className="mt-1 space-y-1">
+                {r.imposters.map((u) => <li key={u} className="font-semibold text-hot-400">{playerOf(u).displayName}</li>)}
+                {r.mrWhite && <li className="font-semibold text-slate-200">{playerOf(r.mrWhite).displayName} <span className="text-xs text-ink-400">(Mr. White)</span></li>}
+              </ul></div>
             <div className="space-y-2">
+              {r.topic && <div><p className="text-sm text-ink-400">Topic</p><p className="font-semibold">{r.topic}</p></div>}
               <div><p className="text-sm text-ink-400">Crew word</p><p className="font-display text-2xl font-bold">{r.word}</p></div>
               <div><p className="text-sm text-ink-400">Imposter's clue</p><p className="font-display text-2xl font-bold text-hot-400">{r.imposterWord}</p></div>
             </div>

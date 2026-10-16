@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { EyeOff, ShieldCheck, Skull } from 'lucide-react';
+import { EyeOff, Ghost, ShieldCheck, Skull } from 'lucide-react';
 import Button from '../components/common/Button.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import PhaseHeader from '../components/game/PhaseHeader.jsx';
@@ -14,6 +14,7 @@ export default function RoleRevealPage() {
   const [run, busy] = useAsyncAction();
   const acked = acks.includes(uid);
   const imposter = role?.role === 'IMPOSTER';
+  const white = role?.role === 'WHITE';
 
   return (
     <div className="mx-auto max-w-md">
@@ -28,16 +29,21 @@ export default function RoleRevealPage() {
               <div className="backface-hidden absolute inset-0 grid place-items-center rounded-3xl border border-brand-500/40 bg-gradient-to-br from-ink-800 to-ink-900 p-6 text-center shadow-2xl shadow-brand-600/20">
                 <div><EyeOff className="mx-auto h-10 w-10 text-brand-300" aria-hidden /><p className="mt-4 font-display text-2xl font-bold">Tap to reveal</p><p className="mt-1 text-sm text-ink-400">Make sure nobody is peeking.</p></div>
               </div>
-              <div className={`backface-hidden absolute inset-0 grid place-items-center rounded-3xl border p-6 text-center shadow-2xl [transform:rotateY(180deg)] ${imposter ? 'border-hot-500/60 bg-gradient-to-br from-hot-600/30 to-ink-900 shadow-hot-500/20' : 'border-emerald-500/40 bg-gradient-to-br from-emerald-500/15 to-ink-900'}`}>
+              <div className={`backface-hidden absolute inset-0 grid place-items-center rounded-3xl border p-6 text-center shadow-2xl [transform:rotateY(180deg)] ${white ? 'border-slate-300/60 bg-gradient-to-br from-slate-200/20 to-ink-900 shadow-white/10' : imposter ? 'border-hot-500/60 bg-gradient-to-br from-hot-600/30 to-ink-900 shadow-hot-500/20' : 'border-emerald-500/40 bg-gradient-to-br from-emerald-500/15 to-ink-900'}`}>
                 <div>
-                  {imposter ? <Skull className="mx-auto h-9 w-9 text-hot-400" aria-hidden /> : <ShieldCheck className="mx-auto h-9 w-9 text-emerald-300" aria-hidden />}
+                  {white ? <Ghost className="mx-auto h-9 w-9 text-slate-200" aria-hidden /> : imposter ? <Skull className="mx-auto h-9 w-9 text-hot-400" aria-hidden /> : <ShieldCheck className="mx-auto h-9 w-9 text-emerald-300" aria-hidden />}
                   <p className="mt-3 text-sm font-semibold text-ink-300">{imposter ? 'You are the' : 'You are'}</p>
-                  <p className={`font-display text-4xl font-extrabold ${imposter ? 'text-hot-400' : 'text-emerald-300'}`}>{imposter ? 'IMPOSTER' : 'CREW'}</p>
+                  <p className={`font-display text-4xl font-extrabold ${white ? 'text-slate-100' : imposter ? 'text-hot-400' : 'text-emerald-300'}`}>{white ? 'MR. WHITE' : imposter ? 'IMPOSTER' : 'CREW'}</p>
                   {role.topic && <p className="mt-4 text-xs uppercase tracking-wide text-ink-400">Topic: {role.topic}</p>}
-                  <p className="mt-3 text-sm text-ink-300">{role.isClue ? 'Your clue (not the real word)' : 'Your word'}</p>
-                  <p className="font-display text-2xl font-bold sm:text-3xl">{role.secretWord}</p>
+                  {white ? <p className="mt-3 font-display text-xl font-bold text-slate-100">No word. No clue.</p> : (
+                    <>
+                      <p className="mt-3 text-sm text-ink-300">{role.isClue ? 'Your clue (not the real word)' : 'Your word'}</p>
+                      <p className="font-display text-2xl font-bold sm:text-3xl">{role.secretWord}</p>
+                    </>
+                  )}
                   <p className="mx-auto mt-5 max-w-[16rem] text-xs text-ink-300">
-                    {imposter ? 'Everyone else has one secret word. You only have a clue about it. Listen, work out the word, and blend in.' : 'Give clues that show you know the word without saying it.'}
+                    {white ? 'Listen to everyone else and bluff a clue. If you are voted out, you get one private guess at the secret word.'
+                      : imposter ? 'Everyone else has one secret word. You only have a clue about it. Listen, work out the word, and blend in.' : 'Give clues that show you know the word without saying it.'}
                   </p>
                 </div>
               </div>
