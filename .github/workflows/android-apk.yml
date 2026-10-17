@@ -59,11 +59,11 @@ jobs:
       - name: Synchronize Capacitor
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Diagnose duplicate classes
         working-directory: android
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+            chmod +x gradlew
+            ./gradlew :app:checkDebugDuplicateClasses --stacktrace --info
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
