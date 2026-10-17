@@ -41,8 +41,19 @@ jobs:
 
       - name: Install Android SDK packages
         run: |
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          yes | sdkmanager --licenses
+          sdkmanager --install \
+            "cmdline-tools;latest" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Verify Android SDK
+        run: |
+          sdkmanager --list_installed
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Synchronize Capacitor
         run: npx cap sync android
