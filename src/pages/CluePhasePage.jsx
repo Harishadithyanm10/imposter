@@ -5,7 +5,7 @@ import Button from '../components/common/Button.jsx';
 import Card from '../components/common/Card.jsx';
 import Input from '../components/common/Input.jsx';
 import PhaseHeader from '../components/game/PhaseHeader.jsx';
-import MyWord from '../components/game/Myword.jsx';
+import MyWord from "../components/game/MyWord.jsx";
 import { useRoom } from '../contexts/RoomContext.jsx';
 import { useAsyncAction } from '../hooks/useAsyncAction.js';
 import { markSpoke, submitClue, SPOKE_MARK } from '../services/gameService.js';
