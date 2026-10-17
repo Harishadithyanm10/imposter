@@ -1,20 +1,7 @@
-```yaml
 name: Build Imposter Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "public/**"
-      - "android/**"
-      - "package.json"
-      - "package-lock.json"
-      - "vite.config.*"
-      - "capacitor.config.*"
-      - ".github/workflows/android-apk.yml"
 
 permissions:
   contents: read
@@ -65,4 +52,3 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
-```
