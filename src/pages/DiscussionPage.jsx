@@ -4,7 +4,7 @@ import Button from '../components/common/Button.jsx';
 import Card from '../components/common/Card.jsx';
 import { Spinner } from '../components/common/Spinner.jsx';
 import ClueList from '../components/game/ClueList.jsx';
-import Myword from "../components/game/Myword.jsx";
+import MyWord from '../components/game/MyWord.jsx';
 import PhaseHeader from '../components/game/PhaseHeader.jsx';
 import { useRoom } from '../contexts/RoomContext.jsx';
 import { useAsyncAction } from '../hooks/useAsyncAction.js';
