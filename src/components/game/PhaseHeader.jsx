@@ -13,7 +13,7 @@ export default function PhaseHeader({ title, subtitle, total }) {
     return () => window.removeEventListener('resize', on);
   }, []);
   return (
-    <div className="sticky top-0 z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-ink-800/60 bg-ink-950/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:mb-6 sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+    <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-ink-800/60 bg-ink-950/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:mb-6 sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
       <div className="min-w-0">
         <p className="text-xs font-semibold text-brand-300 sm:text-sm">Round {room.gameRound ?? 1}/{room.settings.rounds} · Sub-round {round?.cycle ?? 1}/{room.settings.subRounds ?? 3}</p>
         <h1 className="text-2xl font-bold sm:text-4xl">{title}</h1>

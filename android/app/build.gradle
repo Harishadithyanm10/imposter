@@ -1,23 +1,37 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.harishadithyan.imposter"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "com.imposter.game"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.harishadithyan.imposter"
+        // CI passes these (-PappId=... -PappVersionCode=... -PappVersionName=...); the defaults are used for local builds.
+        applicationId project.findProperty('appId') ?: "com.imposter.game"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode (project.findProperty('appVersionCode') ?: '1').toInteger()
+        versionName project.findProperty('appVersionName') ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // Release signing comes from environment variables (set by the GitHub Action from your repository secrets).
+    // Without them the release build stays unsigned and the workflow builds a debug-signed APK instead.
+    signingConfigs {
+        release {
+            if (System.getenv('KEYSTORE_PATH')) {
+                storeFile file(System.getenv('KEYSTORE_PATH'))
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
         }
     }
     buildTypes {
         release {
+            if (System.getenv('KEYSTORE_PATH')) { signingConfig signingConfigs.release }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

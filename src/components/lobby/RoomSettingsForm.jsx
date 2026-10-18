@@ -7,6 +7,20 @@ import { validateRoomSettings } from '../../utils/validators.js';
 
 const num = (v, min, max) => Math.min(max, Math.max(min, Number(v) || min));
 
+// Dropdown helpers. Number inputs were unusable on phones: every keystroke was clamped to the minimum,
+// so you could not clear the box to type a new value. Dropdowns always work and are touch friendly.
+const seq = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+const fmtSec = (s) => (s >= 60 && s % 60 === 0 ? `${s / 60} min` : s > 60 ? `${Math.floor(s / 60)} min ${s % 60} sec` : `${s} sec`);
+/** Options for a list of values; keeps the current value selectable even if it is not in the preset list. */
+const opts = (values, current, label = String) => {
+  const all = values.includes(current) || current == null ? values : [...values, current].sort((x, y) => x - y);
+  return all.map((v) => ({ value: String(v), label: label(v) }));
+};
+const CLUE_SECS = [15, 20, 30, 45, 60, 90, 120];
+const DISCUSSION_SECS = [30, 45, 60, 90, 120, 180, 240, 300, 420, 600];
+const VOTING_SECS = [15, 20, 30, 45, 60, 90, 120, 180];
+const GUESS_SECS = [5, 10, 15, 20, 30, 45, 60];
+
 /** Shared by Create Room and the host's "Change settings" dialog. */
 export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loading, minPlayers = 3 }) {
   const [s, setS] = useState({ ...DEFAULT_SETTINGS, ...initial });
@@ -36,20 +50,21 @@ export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loadi
       <Input label="Room name" value={s.roomName} maxLength={30} onChange={(e) => up('roomName', e.target.value)} error={errors.roomName} placeholder="Friday night crew" />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input label={`Maximum players (3-${MAX_PLAYERS})`} type="number" min={Math.max(3, minPlayers)} max={MAX_PLAYERS} value={s.maxPlayers} onChange={(e) => setPlayers(e.target.value)} />
+        <Select label={`Maximum players (3-${MAX_PLAYERS})`} value={String(s.maxPlayers)} onChange={setPlayers}
+          options={opts(seq(Math.max(3, minPlayers), MAX_PLAYERS), s.maxPlayers)} />
         <Select label="Imposters" value={String(imposters)} onChange={(v) => up('imposters', Number(v))}
           options={Array.from({ length: cap }, (_, i) => i + 1).map((n) => ({ value: String(n), label: String(n) }))}
           hint={`Up to ${cap} with ${s.maxPlayers} players${s.mrWhite ? ' (one hidden slot is used by Mr. White)' : ''}.`} />
-        <Input label="Rounds (1-10)" type="number" min={1} max={10} value={s.rounds} onChange={(e) => up('rounds', num(e.target.value, 1, 10))}
+        <Select label="Rounds (1-10)" value={String(s.rounds)} onChange={(v) => up('rounds', Number(v))} options={opts(seq(1, 10), s.rounds)}
           hint="Each round has its own secret word and fresh roles." />
-        <Input label="Sub-rounds per round (1-5)" type="number" min={1} max={5} value={s.subRounds} onChange={(e) => up('subRounds', num(e.target.value, 1, 5))}
+        <Select label="Sub-rounds per round (1-5)" value={String(s.subRounds)} onChange={(v) => up('subRounds', Number(v))} options={opts(seq(1, 5), s.subRounds)}
           hint={`Same word, up to ${s.subRounds} vote${s.subRounds === 1 ? '' : 's'}. Voted-out players watch. The crew wins once EVERY imposter is caught; if any imposter survives all ${s.subRounds}, the imposters win.`} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Input label="Time per player (sec)" type="number" min={15} max={120} value={s.clueTimer} onChange={(e) => up('clueTimer', num(e.target.value, 15, 120))} />
-        <Input label="Discussion (sec)" type="number" min={30} max={600} value={s.discussionTimer} onChange={(e) => up('discussionTimer', num(e.target.value, 30, 600))} />
-        <Input label="Voting (sec)" type="number" min={15} max={180} value={s.votingTimer} onChange={(e) => up('votingTimer', num(e.target.value, 15, 180))} />
+        <Select label="Time per player" value={String(s.clueTimer)} onChange={(v) => up('clueTimer', Number(v))} options={opts(CLUE_SECS, s.clueTimer, fmtSec)} />
+        <Select label="Discussion" value={String(s.discussionTimer)} onChange={(v) => up('discussionTimer', Number(v))} options={opts(DISCUSSION_SECS, s.discussionTimer, fmtSec)} />
+        <Select label="Voting" value={String(s.votingTimer)} onChange={(v) => up('votingTimer', Number(v))} options={opts(VOTING_SECS, s.votingTimer, fmtSec)} />
       </div>
 
       <Select label="How are clues given?" value={s.typedClues ? 'typed' : 'timer'} onChange={(v) => up('typedClues', v === 'typed')}
@@ -81,7 +96,7 @@ export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loadi
         <Toggle label="Last stand" checked={!!s.lastStand} onChange={(v) => up('lastStand', v)}
           hint="An imposter who is voted out gets one private, timed guess at the secret word. A correct guess steals the round for the imposters." />
         {(s.lastStand || s.mrWhite) && (
-          <Input label="Guess time (sec)" type="number" min={5} max={60} value={s.guessTimer} onChange={(e) => up('guessTimer', num(e.target.value, 5, 60))} hint="How long an eliminated player has for their one guess." />
+          <Select label="Guess time" value={String(s.guessTimer)} onChange={(v) => up('guessTimer', Number(v))} options={opts(GUESS_SECS, s.guessTimer, fmtSec)} hint="How long an eliminated player has for their one guess." />
         )}
         <Toggle label="One more hint" checked={!!s.extraHint} onChange={(v) => up('extraHint', v)}
           hint="Each imposter can reveal one extra private hint per round (first letter and length of the word), during the discussion only." />

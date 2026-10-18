@@ -1,0 +1,123 @@
+# Builds the Android app on GitHub's servers: no Android Studio needed.
+# Run it from the "Actions" tab (Run workflow), or push a tag like v1.0.0 to also publish a GitHub Release.
+name: Build Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore: ['**.md', 'firestore.rules', 'firestore.indexes.json', 'scripts/**', 'ios/**', '.github/workflows/ios.yml']
+
+permissions:
+  contents: write # only used to attach the APK to a Release when you push a version tag
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Public Firebase web config + your website address (Settings > Secrets and variables > Actions)
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_PUBLIC_URL: ${{ secrets.VITE_PUBLIC_URL }}
+      # Optional signing + Google sign-in files
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Check the Firebase settings exist
+        run: |
+          if [ -z "$VITE_FIREBASE_API_KEY" ] || [ -z "$VITE_FIREBASE_PROJECT_ID" ] || [ -z "$VITE_FIREBASE_APP_ID" ]; then
+            echo "::error::Add the VITE_FIREBASE_* repository secrets first (see MOBILE.md, section 'Build with GitHub Actions'). Without them the app would open to a blank screen."
+            exit 1
+          fi
+
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Build the web app
+        run: npm run build
+      - name: Copy it into the Android project
+        run: npx cap sync android
+
+      - name: Add google-services.json (Google sign-in)
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          else
+            echo "::warning::No GOOGLE_SERVICES_JSON_BASE64 secret: the app builds, but 'Continue with Google' will not work on this build (email sign-in still works)."
+          fi
+
+      - name: Prepare signing
+        id: signing
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No keystore secrets: building a debug-signed APK. Its signature changes on every run, so Google sign-in will not work. Add the ANDROID_KEYSTORE_* secrets for a stable, installable release build."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the app
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          APP_ID=$(node -p "require('../capacitor.config.json').appId")
+          VERSION=$(node -p "require('../package.json').version")
+          ARGS="-PappId=$APP_ID -PappVersionCode=${{ github.run_number }} -PappVersionName=$VERSION --no-daemon --stacktrace"
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            ./gradlew assembleRelease bundleRelease $ARGS
+          else
+            ./gradlew assembleDebug $ARGS
+          fi
+
+      - name: Collect the files
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/*.apk out/imposter-android.apk 2>/dev/null || cp android/app/build/outputs/apk/debug/*.apk out/imposter-android-debug.apk
+          cp android/app/build/outputs/bundle/release/*.aab out/imposter-android.aab 2>/dev/null || true
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imposter-android
+          path: out/*
+          if-no-files-found: error
+
+      - name: Publish a GitHub Release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true

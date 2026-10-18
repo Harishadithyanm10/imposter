@@ -21,7 +21,7 @@ export default function Modal({ open, onClose, title, children, wide = false }) 
           onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
           <motion.div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
             initial={{ scale: 0.96, y: 8 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
-            className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[92dvh] overflow-y-auto rounded-t-3xl border border-ink-700 bg-ink-900 p-5 shadow-2xl focus:outline-none sm:rounded-3xl sm:p-6`}>
+            className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[92dvh] overflow-y-auto rounded-t-3xl border border-ink-700 bg-ink-900 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl focus:outline-none sm:rounded-3xl sm:p-6`}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <h2 className="text-xl font-bold">{title}</h2>
               <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1 text-ink-400 hover:text-ink-100"><X className="h-5 w-5" /></button>

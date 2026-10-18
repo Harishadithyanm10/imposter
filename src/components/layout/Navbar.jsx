@@ -30,7 +30,7 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-ink-800 bg-ink-950/85 backdrop-blur">
+      <header className="sticky top-[env(safe-area-inset-top)] z-40 border-b border-ink-800 bg-ink-950/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Logo to="/dashboard" />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -57,7 +57,7 @@ export default function Navbar() {
           </div>
         </div>
       </header>
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-800 bg-ink-950/95 backdrop-blur md:hidden" aria-label="Main mobile">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-800 bg-ink-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main mobile">
         {LINKS.map(({ to, label, Icon }) => (
           <NavLink key={to} to={to} className={({ isActive }) => cx('flex flex-col items-center gap-1 py-2.5 text-xs font-semibold', isActive ? 'text-brand-300' : 'text-ink-400')}>
             <Icon className="h-5 w-5" aria-hidden />{label}

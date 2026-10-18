@@ -1,0 +1,176 @@
+# Builds the iOS app on a GitHub macOS server: no Xcode on your computer needed.
+# Run it from the Actions tab > "Build iOS" > Run workflow and pick what to build:
+#   simulator-check : compiles the app without signing (proves it builds; cannot be installed on a real iPhone)
+#   unsigned-ipa    : an unsigned .ipa you can sign yourself later (for example with Sideloadly and a free Apple ID)
+#   signed-ipa      : a properly signed .ipa for TestFlight / App Store / registered devices (needs a paid Apple Developer account + secrets)
+# macOS minutes cost 10x on private repositories, so this workflow only runs when you start it.
+name: Build iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: What to build
+        type: choice
+        default: simulator-check
+        options: [simulator-check, unsigned-ipa, signed-ipa]
+      export_method:
+        description: signed-ipa only. app-store-connect = TestFlight/App Store, release-testing = ad hoc (registered devices)
+        type: choice
+        default: app-store-connect
+        options: [app-store-connect, release-testing]
+      upload_testflight:
+        description: signed-ipa + app-store-connect only. Upload to TestFlight (needs the APPSTORE_* secrets)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_PUBLIC_URL: ${{ secrets.VITE_PUBLIC_URL }}
+      IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+      IOS_CERT_P12_BASE64: ${{ secrets.IOS_CERT_P12_BASE64 }}
+      IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+      IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+      APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+      BUILD_MODE: ${{ inputs.build }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Check the settings exist
+        run: |
+          if [ -z "$VITE_FIREBASE_API_KEY" ] || [ -z "$VITE_FIREBASE_PROJECT_ID" ] || [ -z "$VITE_FIREBASE_APP_ID" ]; then
+            echo "::error::Add the VITE_FIREBASE_* repository secrets first (see MOBILE.md). Without them the app would open to a blank screen."
+            exit 1
+          fi
+          if [ "$BUILD_MODE" = "signed-ipa" ]; then
+            for v in IOS_CERT_P12_BASE64 IOS_CERT_PASSWORD IOS_PROFILE_BASE64; do
+              if [ -z "${!v}" ]; then echo "::error::Missing secret $v, needed for a signed build (see MOBILE.md)."; exit 1; fi
+            done
+          fi
+
+      - run: npm ci
+      - name: Build the web app
+        run: npm run build
+      - name: Copy it into the iOS project
+        run: npx cap sync ios
+      - run: gem install xcodeproj --no-document
+
+      - name: Google sign-in files
+        run: |
+          if [ -n "$IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo "$IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
+            REV=$(/usr/libexec/PlistBuddy -c 'Print :REVERSED_CLIENT_ID' ios/App/App/GoogleService-Info.plist)
+            /usr/libexec/PlistBuddy -c "Set :CFBundleURLTypes:0:CFBundleURLSchemes:0 $REV" ios/App/App/Info.plist
+          else
+            echo "::warning::No IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 secret: the app builds, but 'Continue with Google' will not work (email sign-in still works)."
+          fi
+
+      - name: Install the signing certificate and profile
+        if: ${{ inputs.build == 'signed-ipa' }}
+        run: |
+          echo "$IOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          echo "$IOS_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          KC="$RUNNER_TEMP/build.keychain-db"; KP=$(openssl rand -hex 16)
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$IOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KP" "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed -e 's/"//g')
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/profile.plist")" >> "$GITHUB_ENV"
+          echo "TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$RUNNER_TEMP/profile.plist")" >> "$GITHUB_ENV"
+
+      - name: Prepare the Xcode project
+        run: |
+          export APP_ID=$(node -p "require('./capacitor.config.json').appId")
+          export APP_VERSION=$(node -p "require('./package.json').version")
+          export BUILD_NUMBER=${{ github.run_number }}
+          export SIGNING=${{ inputs.build == 'signed-ipa' }}
+          echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
+          ruby scripts/ci/prepare-ios.rb
+          xcodebuild -project ios/App/App.xcodeproj -list
+
+      - name: Build (simulator check, no signing)
+        if: ${{ inputs.build == 'simulator-check' }}
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          mkdir -p out && ditto -c -k --keepParent build/Build/Products/Debug-iphonesimulator/App.app out/Imposter-simulator.app.zip
+
+      - name: Build (unsigned IPA)
+        if: ${{ inputs.build == 'unsigned-ipa' }}
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          mkdir -p out/Payload && cp -R build/Build/Products/Release-iphoneos/App.app out/Payload/
+          (cd out && zip -qr Imposter-unsigned.ipa Payload && rm -rf Payload)
+
+      - name: Build (signed IPA)
+        if: ${{ inputs.build == 'signed-ipa' }}
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" archive
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>${{ inputs.export_method }}</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict><key>${APP_ID}</key><string>${PROFILE_NAME}</string></dict>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportPath out -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          ls -la out
+
+      - name: Upload to TestFlight
+        if: ${{ inputs.build == 'signed-ipa' && inputs.export_method == 'app-store-connect' && inputs.upload_testflight }}
+        run: |
+          if [ -z "$APPSTORE_KEY_ID" ] || [ -z "$APPSTORE_ISSUER_ID" ] || [ -z "$APPSTORE_PRIVATE_KEY" ]; then
+            echo "::error::Add the APPSTORE_KEY_ID, APPSTORE_ISSUER_ID and APPSTORE_PRIVATE_KEY secrets to upload to TestFlight."; exit 1
+          fi
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$APPSTORE_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
+          xcrun altool --upload-app --type ios --file out/App.ipa --apiKey "$APPSTORE_KEY_ID" --apiIssuer "$APPSTORE_ISSUER_ID"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imposter-ios-${{ inputs.build }}
+          path: out/*
+          if-no-files-found: error

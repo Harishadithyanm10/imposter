@@ -1,5 +1,22 @@
 {
-  "appId": "com.harishadithyan.imposter",
+  "appId": "com.imposter.game",
   "appName": "Imposter",
-  "webDir": "dist"
+  "webDir": "dist",
+  "backgroundColor": "#0d0d12",
+  "ios": { "contentInset": "never", "backgroundColor": "#0d0d12", "scrollEnabled": true },
+  "android": { "backgroundColor": "#0d0d12", "allowMixedContent": false },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 1500, "launchAutoHide": true, "backgroundColor": "#0d0d12", "showSpinner": false, "androidScaleType": "CENTER_CROP" },
+    "Keyboard": { "resize": "native" },
+    "FirebaseAuthentication": { "skipNativeAuth": true, "providers": ["google.com"] }
+  },
+  "experimental": {
+    "ios": {
+      "spm": {
+        "swiftToolsVersion": "6.1",
+        "packageTraits": { "@capacitor-firebase/authentication": ["Google"] },
+        "packageOptions": { "@capacitor-firebase/authentication": { "symlink": true } }
+      }
+    }
+  }
 }

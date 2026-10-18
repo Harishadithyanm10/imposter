@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, indexedDBLocalPersistence, initializeAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { isNative } from '../native.js';
 
 // Public web config (not secrets). Security comes from Auth + Firestore Security Rules.
 // Only Authentication + Cloud Firestore are used, so everything fits the free Spark plan.
@@ -19,7 +20,8 @@ if (missing.length) {
 }
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+// In the Android/iOS apps the browser popup/redirect machinery is unavailable, so use plain IndexedDB persistence.
+export const auth = isNative ? initializeAuth(app, { persistence: indexedDBLocalPersistence }) : getAuth(app);
 export const db = getFirestore(app);
 
 if (import.meta.env.VITE_USE_EMULATORS === 'true') {

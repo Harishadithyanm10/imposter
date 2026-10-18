@@ -30,7 +30,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 top-3 z-[100] flex flex-col items-center gap-2 px-3" role="status" aria-live="polite">
+      <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[100] flex flex-col items-center gap-2 px-3" role="status" aria-live="polite">
         <AnimatePresence>
           {toasts.map((t) => {
             const { Icon, cls } = STYLES[t.type];

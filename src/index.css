@@ -33,6 +33,11 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+/* Phones: keep content clear of the notch / status bar. env() is 0 in a normal browser, so the web build is unchanged. */
+body { padding-top: env(safe-area-inset-top, 0px); -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+body::before { content: ""; position: fixed; inset: 0 0 auto 0; height: env(safe-area-inset-top, 0px); background: var(--color-ink-950); z-index: 45; pointer-events: none; }
+html.native body { -webkit-user-select: none; user-select: none; }
+html.native input, html.native textarea, html.native select { -webkit-user-select: text; user-select: text; }
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
 
 :focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 2px; border-radius: 6px; }

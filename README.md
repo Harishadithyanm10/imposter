@@ -99,10 +99,36 @@ firebase deploy --only hosting
 
 ## 5. Project layout
 ```
-src/lib/        engine.js (rules), hostGame.js (host game loop), words.jsx, settings.js, random.js
+src/lib/        engine.js (rules), hostGame.js (host game loop), words.js, settings.js, random.js
 src/services/   firebase.js, authService, profileService, roomService, gameService
 src/hooks/      useRoomState, useHostEngine, useHostWatch, usePresence, useRecordResult, ...
 src/pages/      all 16 screens        src/components/  reusable UI
 firestore.rules  firestore.indexes.json  firebase.json
 tests/          engine, settings and security-rules tests
 ```
+
+
+## Editing the word bank (Firestore, free)
+
+Words and clues live in the Firestore collection **`words`** (one document per word). The host's browser reads it when a game starts; if the collection is empty or unreadable the built-in list in `src/lib/words.js` is used.
+
+Fields of each document:
+
+| field | type | example |
+|---|---|---|
+| `category` | string (UPPERCASE key) | `FOOD` |
+| `categoryLabel` | string | `Food & drink` |
+| `word` | string (what the crew sees) | `Tea` |
+| `hint` | string (what the imposter sees: 1-2 vague words, must not contain the word) | `Steeped` |
+| `difficulty` | number: 1 easy, 2 medium, 3 hard | `2` |
+| `active` | boolean (optional; `false` hides it) | `true` |
+
+* Add or edit one word: Firebase console > Firestore Database > `words` > Add document.
+* Bulk upload (500 words included): `npm i -D firebase-admin`, download a service-account key, then `node scripts/seedWords.mjs ./serviceAccountKey.json`. Re-running updates instead of duplicating.
+* New categories you invent appear in **Random topic** automatically. To also list them in the room-settings dropdown, add them to `CATEGORY_LABELS` in `src/lib/words.js`.
+* Cost: the host reads the whole collection about once per 10 minutes of play (about 500 reads), well inside the free 50,000 reads/day.
+
+
+## Android and iOS apps
+
+The project is also set up as native apps with Capacitor. See **MOBILE.md**. It explains how to build the apps with GitHub Actions (no Android Studio or Xcode needed), plus Google sign-in, signing and publishing.

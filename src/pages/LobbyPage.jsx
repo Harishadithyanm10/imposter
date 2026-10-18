@@ -14,6 +14,7 @@ import { startMatch } from '../lib/hostGame.js';
 import { rolesFit } from '../lib/engine.js';
 import { closeRoom, kickPlayer, leaveRoom, setReady, updateSettings } from '../services/roomService.js';
 import { cx } from '../utils/cx.js';
+import { nativeShare, publicOrigin } from '../native.js';
 
 export default function LobbyPage() {
   const { roomId, room, members, uid, isHost, me } = useRoom();
@@ -26,7 +27,8 @@ export default function LobbyPage() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const s = room.settings;
-  const link = `${window.location.origin}/join/${room.roomCode}`;
+  const origin = publicOrigin();
+  const link = origin ? `${origin}/join/${room.roomCode}` : null; // apps need VITE_PUBLIC_URL for a shareable link
 
   const others = members.filter((m) => m.id !== room.hostUid);
   const readyCount = others.filter((m) => m.isReady).length;
@@ -42,8 +44,10 @@ export default function LobbyPage() {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); toast.success(msg); } catch { toast.error('Could not copy. Select and copy it manually.'); }
   }
   async function share() {
-    if (navigator.share) { try { await navigator.share({ title: 'Join my Imposter game', text: `Join "${room.roomName}" with code ${room.roomCode}`, url: link }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-    copy(link, 'Invite link copied.');
+    const msg = { title: 'Join my Imposter game', text: `Join "${room.roomName}" in Imposter with code ${room.roomCode}`, url: link };
+    if (await nativeShare(msg)) return;
+    if (navigator.share) { try { await navigator.share(msg.url ? msg : { title: msg.title, text: msg.text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    copy(link || `Join my Imposter game with code ${room.roomCode}`, link ? 'Invite link copied.' : 'Invite message copied.');
   }
 
   return (

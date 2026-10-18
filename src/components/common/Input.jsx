@@ -40,7 +40,7 @@ export function Select({ label, value, onChange, options, className, hint }) {
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink-100">{label}</label>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-ink-600 bg-ink-800 px-3.5 py-2.5 text-ink-100 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
+        className="min-h-11 w-full rounded-xl border border-ink-600 bg-ink-800 px-3.5 py-3 text-base text-ink-100 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 sm:py-2.5 sm:text-sm">
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {hint && <p className="mt-1.5 text-xs text-ink-400">{hint}</p>}

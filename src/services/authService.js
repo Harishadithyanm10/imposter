@@ -1,14 +1,16 @@
 import {
   GoogleAuthProvider, browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword,
   deleteUser, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup,
-  sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile as updateAuthProfile,
+  sendPasswordResetEmail, setPersistence, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile as updateAuthProfile,
 } from 'firebase/auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
 import { AVATAR_KEYS } from '../constants/avatars.js';
 import { validateDisplayName } from '../lib/settings.js';
 import { randomInt } from '../lib/random.js';
 import { leaderboardEntry } from './leaderboardService.js';
+import { isNative } from '../native.js';
 
 const nameKey = (n) => n.toLowerCase();
 
@@ -89,17 +91,42 @@ export async function loginWithEmail(email, password, remember = true) {
   return signInWithEmailAndPassword(auth, email.trim(), password);
 }
 
+/**
+ * Google blocks OAuth inside embedded web views, so the apps use the NATIVE Google account picker and then
+ * hand the resulting token to the normal Firebase JS SDK (skipNativeAuth), so everything else is unchanged.
+ */
+async function nativeGoogleCredential() {
+  let res;
+  try {
+    res = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
+  } catch (e) {
+    const err = new Error(e?.message || 'Google sign-in failed.');
+    err.code = /cancel/i.test(String(e?.message)) || String(e?.code) === '12501' ? 'auth/popup-closed-by-user' : e?.code;
+    throw err;
+  }
+  const idToken = res?.credential?.idToken;
+  if (!idToken) { const err = new Error('Google sign-in was cancelled.'); err.code = 'auth/popup-closed-by-user'; throw err; }
+  return GoogleAuthProvider.credential(idToken, res.credential.accessToken || undefined);
+}
+
 export async function loginWithGoogle() {
-  await setPersistence(auth, browserLocalPersistence);
-  const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-  await ensureProfile(cred.user);
-  return cred.user;
+  let user;
+  if (isNative) {
+    user = (await signInWithCredential(auth, await nativeGoogleCredential())).user;
+  } else {
+    await setPersistence(auth, browserLocalPersistence);
+    user = (await signInWithPopup(auth, new GoogleAuthProvider())).user;
+  }
+  await ensureProfile(user);
+  return user;
 }
 
 export const logout = () => signOut(auth);
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 
 export async function reauthenticate(user, password) {
-  if (user.providerData.some((p) => p.providerId === 'google.com')) return reauthenticateWithPopup(user, new GoogleAuthProvider());
+  if (user.providerData.some((p) => p.providerId === 'google.com')) {
+    return isNative ? reauthenticateWithCredential(user, await nativeGoogleCredential()) : reauthenticateWithPopup(user, new GoogleAuthProvider());
+  }
   return reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
 }
