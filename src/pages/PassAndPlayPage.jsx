@@ -13,7 +13,7 @@ import { AVATAR_KEYS } from '../constants/avatars.js';
 import { CATEGORIES, DIFFICULTIES, maxImposters } from '../constants/game.js';
 import * as engine from '../lib/engine.js';
 import { shuffle } from '../lib/random.js';
-import { pickWords } from '../lib/words.jsx';
+import { pickWords } from '../lib/words.js';
 import { cx } from '../utils/cx.js';
 
 const DEFAULTS = { imposters: 1, rounds: 3, subRounds: 3, clueTimer: 30, discussionTimer: 120, category: 'RANDOM', difficulty: 'ANY' };

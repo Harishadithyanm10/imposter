@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as e from '../src/lib/engine.js';
-import { BANK, pickWords } from '../src/lib/words.jsx';
+import { BANK, pickWords } from '../src/lib/words.js';
 import { roomCode, shuffle } from '../src/lib/random.js';
 
 test('maxImposters keeps normals as the majority', () => {

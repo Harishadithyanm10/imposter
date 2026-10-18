@@ -2,7 +2,7 @@
 // host only pays the reads once every few minutes. Returns null (=> use built-in list) on any problem.
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { buildBank } from '../lib/words.jsx';
+import { buildBank } from '../lib/words.js';
 
 const TTL_MS = 10 * 60 * 1000;
 let cache = null;

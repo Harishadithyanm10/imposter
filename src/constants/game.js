@@ -1,4 +1,4 @@
-import { CATEGORY_LABELS } from '../lib/words.jsx';
+import { CATEGORY_LABELS } from '../lib/words.js';
 
 export const GAME_MODES = [
   { value: 'CLASSIC', label: 'Classic Imposter', hint: 'The crew share one word. The imposter only gets a vague clue about it (never the word, never an opposite).' },
