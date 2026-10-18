@@ -50,6 +50,11 @@ jobs:
           cache: gradle
 
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's default list also asks for the old "tools" package, which Google removed
+          # (that is the "Failed to find package 'tools'" error). Only request what still exists;
+          # Gradle downloads the SDK platform and build tools it needs, and the action accepts the licenses.
+          packages: platform-tools
 
       - name: Check the Firebase settings exist
         run: |
