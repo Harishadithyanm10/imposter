@@ -21,7 +21,11 @@ if (missing.length) {
 
 export const app = initializeApp(firebaseConfig);
 // In the Android/iOS apps the browser popup/redirect machinery is unavailable, so use plain IndexedDB persistence.
-export const auth = isNative ? initializeAuth(app, { persistence: indexedDBLocalPersistence }) : getAuth(app);
+function makeAuth() {
+  if (!isNative) return getAuth(app);
+  try { return initializeAuth(app, { persistence: indexedDBLocalPersistence }); } catch { return getAuth(app); }
+}
+export const auth = makeAuth();
 export const db = getFirestore(app);
 
 if (import.meta.env.VITE_USE_EMULATORS === 'true') {
