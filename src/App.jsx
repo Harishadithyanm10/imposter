@@ -1,4 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import AppLoader from './components/common/AppLoader.jsx';
+import WelcomePage from './pages/WelcomePage.jsx';
+import { useAuth } from './contexts/AuthContext.jsx';
+import { isApp } from './native.js';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import LandingPage from './pages/LandingPage.jsx';
@@ -16,10 +20,18 @@ import HowToPlayPage from './pages/HowToPlayPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
+/** Website: marketing page. Phone app: straight to your home screen, or the welcome screen when signed out. */
+function Entry() {
+  const { user, profile, loading } = useAuth();
+  if (!isApp) return <LandingPage />;
+  if (loading) return <AppLoader />;
+  return user && profile ? <Navigate to="/dashboard" replace /> : <WelcomePage />;
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<Entry />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />

@@ -36,8 +36,26 @@ body {
 /* Phones: keep content clear of the notch / status bar. env() is 0 in a normal browser, so the web build is unchanged. */
 body { padding-top: env(safe-area-inset-top, 0px); -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 body::before { content: ""; position: fixed; inset: 0 0 auto 0; height: env(safe-area-inset-top, 0px); background: var(--color-ink-950); z-index: 45; pointer-events: none; }
-html.native body { -webkit-user-select: none; user-select: none; }
-html.native input, html.native textarea, html.native select { -webkit-user-select: text; user-select: text; }
+html.app body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+html.app input, html.app textarea, html.app select { -webkit-user-select: text; user-select: text; }
+html.app { --tabbar-h: calc(4.25rem + env(safe-area-inset-bottom, 0px)); }
+html.app ::-webkit-scrollbar { display: none; }
+html.kb-open [data-tabbar] { display: none; }
+html.app [data-title] { display: none; }
+/* launch / loading animation (the same markup is in index.html so the app never flashes blank) */
+@keyframes ghost-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes ghost-ring { 0% { transform: scale(.7); opacity: .6; } 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes ghost-blink { 0%,100% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes ghost-dot { 0%,80%,100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+.boot-wrap { position: relative; width: 120px; height: 120px; display: grid; place-items: center; }
+.boot-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(139,92,246,.6); animation: ghost-ring 2.2s ease-out infinite; }
+.boot-ring.r2 { animation-delay: 1.1s; border-color: rgba(255,59,92,.5); }
+.boot-ghost { width: 84px; height: 84px; animation: ghost-float 2.4s ease-in-out infinite; filter: drop-shadow(0 8px 24px rgba(139,92,246,.45)); }
+.boot-eye { animation: ghost-blink 2.4s ease-in-out infinite; }
+.boot-dots { display: flex; gap: 8px; }
+.boot-dots b { width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; animation: ghost-dot 1.2s ease-in-out infinite; }
+.boot-dots b:nth-child(2) { animation-delay: .15s; } .boot-dots b:nth-child(3) { animation-delay: .3s; }
+
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
 
 :focus-visible { outline: 2px solid var(--color-brand-400); outline-offset: 2px; border-radius: 6px; }

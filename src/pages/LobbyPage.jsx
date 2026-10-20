@@ -123,7 +123,7 @@ export default function LobbyPage() {
       </div>
 
       <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Room settings" wide>
-        <RoomSettingsForm initial={{ ...s, customWord: '', customImposterWord: '' }} minPlayers={members.length} submitLabel="Save settings" loading={busy}
+        <RoomSettingsForm initial={{ ...s, customWord: '', customImposterWord: '' }} minPlayers={members.length} submitLabel="Save settings" inModal loading={busy}
           onSubmit={async (next) => { const out = await run(() => updateSettings(roomId, next, { memberCount: members.length, existingHasCustom: !!s.hasCustomWords }), 'Settings saved.'); if (out.ok) setShowSettings(false); }} />
       </Modal>
       <ConfirmDialog open={!!kick} onClose={() => setKick(null)} title={`Remove ${kick?.displayName}?`} message="They will be taken out of the room and can rejoin with the code." confirmLabel="Remove player" loading={busy}

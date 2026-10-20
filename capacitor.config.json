@@ -6,7 +6,7 @@
   "ios": { "contentInset": "never", "backgroundColor": "#0d0d12", "scrollEnabled": true },
   "android": { "backgroundColor": "#0d0d12", "allowMixedContent": false },
   "plugins": {
-    "SplashScreen": { "launchShowDuration": 1500, "launchAutoHide": true, "backgroundColor": "#0d0d12", "showSpinner": false, "androidScaleType": "CENTER_CROP" },
+    "SplashScreen": { "launchShowDuration": 0, "launchAutoHide": false, "launchFadeOutDuration": 250, "backgroundColor": "#0d0d12", "showSpinner": false, "androidScaleType": "CENTER_CROP" },
     "Keyboard": { "resize": "native" },
     "FirebaseAuthentication": { "skipNativeAuth": true, "providers": ["google.com"] }
   },

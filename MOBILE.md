@@ -126,6 +126,12 @@ Then run `npm run build:mobile` again.
   or remove the Google button on iOS.
 * Icons and splash screens were generated from `assets/`. Replace the PNGs there and run `npm run icons` to regenerate them.
 
+## Previewing the phone-app look in a browser
+
+The app interface (welcome screen, tab bar, app home, loader) is used automatically inside the Android and iOS apps.
+To preview it in any browser, open your site with `?app=1` added (for example `http://localhost:5173/?app=1`) and use the phone view in
+the developer tools. Add `?app=0` to switch it off again.
+
 ## What changed for the apps
 
 * `capacitor.config.json`, `android/`, `ios/`, `assets/`: the native projects and their config.

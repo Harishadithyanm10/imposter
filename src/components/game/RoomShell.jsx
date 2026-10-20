@@ -15,7 +15,7 @@ export default function RoomShell({ children }) {
   }, []);
   return (
     <div className="min-h-dvh pb-[env(safe-area-inset-bottom)]">
-      <header className="border-b border-ink-800 bg-ink-950/85 backdrop-blur">
+      <header className="sticky top-[env(safe-area-inset-top)] z-30 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-4">
           <Logo to="/dashboard" className="!text-lg" />
           <div className="flex items-center gap-3 text-sm">

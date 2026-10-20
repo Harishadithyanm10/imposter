@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import Card from '../components/common/Card.jsx';
 import RoomSettingsForm from '../components/lobby/RoomSettingsForm.jsx';
 import { useAsyncAction } from '../hooks/useAsyncAction.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { createRoom } from '../services/roomService.js';
+import { isApp } from '../native.js';
 
 export default function CreateRoomPage() {
   const navigate = useNavigate();
@@ -17,9 +17,10 @@ export default function CreateRoomPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-3xl font-bold">Create a room</h1>
-      <p className="mt-1 text-ink-300">Set the rules, then invite friends with a room code.</p>
-      <Card className="mt-6"><RoomSettingsForm onSubmit={onSubmit} submitLabel="Create room" loading={busy} /></Card>
+      {/* the phone app already shows the title in its top bar */}
+      {!isApp && <h1 className="text-3xl font-bold">Create a room</h1>}
+      <p className={isApp ? 'mb-4 text-ink-300' : 'mb-6 mt-1 text-ink-300'}>Set the rules, then invite friends with a room code.</p>
+      <RoomSettingsForm onSubmit={onSubmit} submitLabel="Create room" loading={busy} />
     </div>
   );
 }

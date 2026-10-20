@@ -21,8 +21,18 @@ const DISCUSSION_SECS = [30, 45, 60, 90, 120, 180, 240, 300, 420, 600];
 const VOTING_SECS = [15, 20, 30, 45, 60, 90, 120, 180];
 const GUESS_SECS = [5, 10, 15, 20, 30, 45, 60];
 
+/** A titled group of settings, so the long form is easy to scan on a phone. */
+function Section({ title, hint, children }) {
+  return (
+    <section className="space-y-4 rounded-3xl border border-ink-700/70 bg-ink-900/70 p-4 sm:p-5">
+      <div><h3 className="text-sm font-bold uppercase tracking-wide text-ink-300">{title}</h3>{hint && <p className="mt-1 text-xs text-ink-400">{hint}</p>}</div>
+      {children}
+    </section>
+  );
+}
+
 /** Shared by Create Room and the host's "Change settings" dialog. */
-export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loading, minPlayers = 3 }) {
+export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loading, minPlayers = 3, inModal = false }) {
   const [s, setS] = useState({ ...DEFAULT_SETTINGS, ...initial });
   const [errors, setErrors] = useState({});
   const cap = Math.max(1, maxImposters(s.maxPlayers) - (s.mrWhite ? 1 : 0)); // Mr. White takes one hidden slot
@@ -46,50 +56,56 @@ export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loadi
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-6">
-      <Input label="Room name" value={s.roomName} maxLength={30} onChange={(e) => up('roomName', e.target.value)} error={errors.roomName} placeholder="Friday night crew" />
+    <form onSubmit={submit} noValidate className="space-y-4">
+      <Section title="Room">
+        <Input label="Room name" value={s.roomName} maxLength={30} onChange={(e) => up('roomName', e.target.value)} error={errors.roomName} placeholder="Friday night crew" />
+      </Section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Select label={`Maximum players (3-${MAX_PLAYERS})`} value={String(s.maxPlayers)} onChange={setPlayers}
-          options={opts(seq(Math.max(3, minPlayers), MAX_PLAYERS), s.maxPlayers)} />
-        <Select label="Imposters" value={String(imposters)} onChange={(v) => up('imposters', Number(v))}
-          options={Array.from({ length: cap }, (_, i) => i + 1).map((n) => ({ value: String(n), label: String(n) }))}
-          hint={`Up to ${cap} with ${s.maxPlayers} players${s.mrWhite ? ' (one hidden slot is used by Mr. White)' : ''}.`} />
-        <Select label="Rounds (1-10)" value={String(s.rounds)} onChange={(v) => up('rounds', Number(v))} options={opts(seq(1, 10), s.rounds)}
-          hint="Each round has its own secret word and fresh roles." />
-        <Select label="Sub-rounds per round (1-5)" value={String(s.subRounds)} onChange={(v) => up('subRounds', Number(v))} options={opts(seq(1, 5), s.subRounds)}
-          hint={`Same word, up to ${s.subRounds} vote${s.subRounds === 1 ? '' : 's'}. Voted-out players watch. The crew wins once EVERY imposter is caught; if any imposter survives all ${s.subRounds}, the imposters win.`} />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Select label="Time per player" value={String(s.clueTimer)} onChange={(v) => up('clueTimer', Number(v))} options={opts(CLUE_SECS, s.clueTimer, fmtSec)} />
-        <Select label="Discussion" value={String(s.discussionTimer)} onChange={(v) => up('discussionTimer', Number(v))} options={opts(DISCUSSION_SECS, s.discussionTimer, fmtSec)} />
-        <Select label="Voting" value={String(s.votingTimer)} onChange={(v) => up('votingTimer', Number(v))} options={opts(VOTING_SECS, s.votingTimer, fmtSec)} />
-      </div>
-
-      <Select label="How are clues given?" value={s.typedClues ? 'typed' : 'timer'} onChange={(v) => up('typedClues', v === 'typed')}
-        options={[{ value: 'timer', label: 'Timer only: players say their clue out loud' }, { value: 'typed', label: 'Players type their clue' }]}
-        hint={s.typedClues ? 'Each player types a short clue on their turn. Everyone sees it.' : 'No typing. Each player gets a timer to speak (in person or on a call) and taps Done.'} />
-
-      <Select label="Game mode" value={s.gameMode} onChange={(v) => up('gameMode', v)} options={GAME_MODES} hint={mode?.hint} />
-
-      {s.gameMode === 'CUSTOM' ? (
-        <div className="grid gap-4 rounded-2xl bg-ink-800/60 p-4 sm:grid-cols-2">
-          <Input label="Secret word" value={s.customWord} onChange={(e) => up('customWord', e.target.value)} error={errors.customWord} maxLength={30}
-            placeholder={s.hasCustomWords ? 'Leave blank to keep current' : 'Tea'} />
-          <Input label="Clue for the imposter" value={s.customImposterWord} onChange={(e) => up('customImposterWord', e.target.value)} error={errors.customImposterWord} maxLength={40}
-            placeholder={s.hasCustomWords ? 'Leave blank to keep current' : 'A hot drink made from leaves'} />
-          <p className="text-xs text-ink-400 sm:col-span-2">Words are stored privately on the server and are not visible to other players until the game ends.</p>
+      <Section title="Players" hint={`Up to ${cap} imposter${cap === 1 ? '' : 's'} with ${s.maxPlayers} players${s.mrWhite ? ' (one hidden slot is used by Mr. White)' : ''}. The crew always stays the majority.`}>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Max players" value={String(s.maxPlayers)} onChange={setPlayers} options={opts(seq(Math.max(3, minPlayers), MAX_PLAYERS), s.maxPlayers)} />
+          <Select label="Imposters" value={String(imposters)} onChange={(v) => up('imposters', Number(v))}
+            options={Array.from({ length: cap }, (_, i) => i + 1).map((n) => ({ value: String(n), label: String(n) }))} />
         </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Topic" value={s.category} onChange={(v) => up('category', v)} options={CATEGORIES} />
-          <Select label="Difficulty" value={s.difficulty} onChange={(v) => up('difficulty', v)} options={DIFFICULTIES} />
-        </div>
-      )}
+      </Section>
 
-      <fieldset className="space-y-3">
-        <legend className="mb-1 text-sm font-semibold text-ink-100">Special rules <span className="font-normal text-ink-400">(all optional)</span></legend>
+      <Section title="Rounds" hint={`Each round has its own word and fresh roles. In every round there are up to ${s.subRounds} vote${s.subRounds === 1 ? '' : 's'} on the same word: the crew wins once EVERY imposter is caught, and if any imposter survives all ${s.subRounds}, the imposters win.`}>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Rounds" value={String(s.rounds)} onChange={(v) => up('rounds', Number(v))} options={opts(seq(1, 10), s.rounds)} />
+          <Select label="Sub-rounds" value={String(s.subRounds)} onChange={(v) => up('subRounds', Number(v))} options={opts(seq(1, 5), s.subRounds)} />
+        </div>
+      </Section>
+
+      <Section title="Timers">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <Select label="Per player" value={String(s.clueTimer)} onChange={(v) => up('clueTimer', Number(v))} options={opts(CLUE_SECS, s.clueTimer, fmtSec)} />
+          <Select label="Discussion" value={String(s.discussionTimer)} onChange={(v) => up('discussionTimer', Number(v))} options={opts(DISCUSSION_SECS, s.discussionTimer, fmtSec)} />
+          <Select label="Voting" value={String(s.votingTimer)} onChange={(v) => up('votingTimer', Number(v))} options={opts(VOTING_SECS, s.votingTimer, fmtSec)} />
+        </div>
+      </Section>
+
+      <Section title="Clues and words">
+        <Select label="How are clues given?" value={s.typedClues ? 'typed' : 'timer'} onChange={(v) => up('typedClues', v === 'typed')}
+          options={[{ value: 'timer', label: 'Timer only: say it out loud' }, { value: 'typed', label: 'Players type their clue' }]}
+          hint={s.typedClues ? 'Each player types a short clue on their turn. Everyone sees it.' : 'No typing. Each player gets a timer to speak (in person or on a call) and taps Done.'} />
+        <Select label="Game mode" value={s.gameMode} onChange={(v) => up('gameMode', v)} options={GAME_MODES} hint={mode?.hint} />
+        {s.gameMode === 'CUSTOM' ? (
+          <div className="grid gap-4 rounded-2xl bg-ink-800/60 p-4 sm:grid-cols-2">
+            <Input label="Secret word" value={s.customWord} onChange={(e) => up('customWord', e.target.value)} error={errors.customWord} maxLength={30}
+              placeholder={s.hasCustomWords ? 'Leave blank to keep current' : 'Tea'} />
+            <Input label="Clue for the imposter" value={s.customImposterWord} onChange={(e) => up('customImposterWord', e.target.value)} error={errors.customImposterWord} maxLength={40}
+              placeholder={s.hasCustomWords ? 'Leave blank to keep current' : 'A hot drink made from leaves'} />
+            <p className="text-xs text-ink-400 sm:col-span-2">Words are stored privately on the server and are not visible to other players until the game ends.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Select label="Topic" value={s.category} onChange={(v) => up('category', v)} options={CATEGORIES} />
+            <Select label="Difficulty" value={s.difficulty} onChange={(v) => up('difficulty', v)} options={DIFFICULTIES} />
+          </div>
+        )}
+      </Section>
+
+      <Section title="Special rules" hint="All optional.">
         <Toggle label="Mr. White" checked={!!s.mrWhite} onChange={(v) => up('mrWhite', v)}
           hint="One extra hidden player gets NO word and NO clue. If voted out, they get one private guess at the word. Needs 5+ players; the crew must stay the majority." />
         {errors.mrWhite && <p role="alert" className="text-xs text-hot-400">{errors.mrWhite}</p>}
@@ -104,9 +120,12 @@ export default function RoomSettingsForm({ initial, onSubmit, submitLabel, loadi
           hint="Between sub-rounds there may be Reverse Order (the speaking order flips) or Panic Mode (half the clue time). One at a time, never the same twice in a row." />
         <Toggle label="Spectator reactions" checked={s.reactions !== false} onChange={(v) => up('reactions', v)}
           hint="Eliminated players can send emoji reactions while they watch." />
-      </fieldset>
+      </Section>
 
-      <Button type="submit" size="lg" className="w-full" loading={loading}>{submitLabel}</Button>
+      {/* stays on screen while you scroll the long form; sits above the tab bar in the phone app */}
+      <div className="sticky z-10 -mx-1 bg-gradient-to-t from-ink-950 via-ink-950/90 to-transparent px-1 pb-1 pt-5" style={{ bottom: inModal ? 0 : 'calc(var(--tabbar-h, 0px) + 0.5rem)' }}>
+        <Button type="submit" size="lg" className="w-full" loading={loading}>{submitLabel}</Button>
+      </div>
     </form>
   );
 }

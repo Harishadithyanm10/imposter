@@ -7,6 +7,9 @@ import { Spinner } from '../components/common/Spinner.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { computeStats, getHistory } from '../services/profileService.js';
 import { formatDate } from '../utils/time.js';
+import { isApp } from '../native.js';
+import AppHome from './AppHome.jsx';
+import { SkeletonRows } from '../components/common/Skeleton.jsx';
 import HistoryRow from '../components/common/HistoryRow.jsx';
 
 function Stat({ label, value }) {
@@ -19,6 +22,10 @@ function Stat({ label, value }) {
 }
 
 export default function DashboardPage() {
+  return isApp ? <AppHome /> : <WebDashboard />;
+}
+
+function WebDashboard() {
   const { user, profile } = useAuth();
   const [recent, setRecent] = useState(null);
   const stats = computeStats(profile);
@@ -52,7 +59,7 @@ export default function DashboardPage() {
 
       <section aria-label="Recent games">
         <h2 className="mb-3 text-xl font-bold">Recent games</h2>
-        {recent === null ? <div className="flex justify-center py-10 text-ink-400"><Spinner /></div>
+        {recent === null ? <SkeletonRows rows={3} />
           : recent.length === 0 ? (
             <EmptyState icon={Gamepad2} title="No games yet" action={<Button to="/create">Create your first room</Button>}>
               Your results and win rate will show up here after you finish a game.

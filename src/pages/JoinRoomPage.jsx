@@ -38,7 +38,7 @@ export default function JoinRoomPage() {
 
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="text-3xl font-bold">Join a room</h1>
+      <h1 data-title className="text-3xl font-bold">Join a room</h1>
       <p className="mt-1 text-ink-300">Enter the six-character code your host shared.</p>
       <Card className="mt-6">
         <form onSubmit={(e) => { e.preventDefault(); join(code); }} noValidate className="space-y-4">

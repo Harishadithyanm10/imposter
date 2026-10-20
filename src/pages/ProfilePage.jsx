@@ -46,7 +46,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-3xl font-bold">Profile</h1>
+      <h1 data-title className="text-3xl font-bold">Profile</h1>
       <Card>
         <div className="mb-6 flex items-center gap-4">
           <Avatar name={v.displayName} avatar={v.avatar} size="lg" />

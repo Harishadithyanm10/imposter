@@ -6,7 +6,7 @@ import { AuthProvider } from './contexts/AuthContext.jsx';
 import { ToastProvider } from './contexts/ToastContext.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import './index.css';
-import { initNative } from './native.js';
+import { appReady, initNative } from './native.js';
 
 initNative();
 
@@ -23,3 +23,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </React.StrictMode>,
 );
+
+// the React loader looks identical to the launch screen, so swapping them is seamless
+requestAnimationFrame(() => requestAnimationFrame(appReady));

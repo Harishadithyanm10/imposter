@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Eye, Lock, MessageSquare, Radio, Smartphone, Users, Vote, Zap } from 'lucide-react';
+import { BookOpen, Eye, Lock, MessageSquare, Radio, Smartphone, Users, Vote, Zap } from 'lucide-react';
 import Logo from '../components/common/Logo.jsx';
 import Button from '../components/common/Button.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -21,14 +21,15 @@ export default function LandingPage() {
   const authed = !loading && !!user;
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-4 sm:py-5">
         <Logo />
         <nav className="flex items-center gap-1 sm:gap-2" aria-label="Account">
-          <Button to="/how-to-play" variant="ghost" size="sm">How to play</Button>
+          <Button to="/how-to-play" variant="ghost" size="sm" className="hidden sm:inline-flex">How to play</Button>
+          <Button to="/how-to-play" variant="ghost" size="sm" className="sm:hidden" aria-label="How to play"><BookOpen className="h-4 w-4" aria-hidden /></Button>
           {authed ? <Button to="/dashboard" size="sm">Play Now</Button> : (
             <>
               <Button to="/login" variant="ghost" size="sm">Login</Button>
-              <Button to="/register" size="sm">Create Account</Button>
+              <Button to="/register" size="sm" className="whitespace-nowrap"><span className="sm:hidden">Sign up</span><span className="hidden sm:inline">Create Account</span></Button>
             </>
           )}
         </nav>

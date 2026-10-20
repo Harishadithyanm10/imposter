@@ -3,7 +3,7 @@ import { Crown, Medal, Search, Trophy } from 'lucide-react';
 import Avatar from '../components/common/Avatar.jsx';
 import Card from '../components/common/Card.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
-import { Spinner } from '../components/common/Spinner.jsx';
+import { SkeletonRows, Skeleton } from '../components/common/Skeleton.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { getLeaderboard, syncMyLeaderboard } from '../services/leaderboardService.js';
 import { cx } from '../utils/cx.js';
@@ -39,11 +39,11 @@ export default function LeaderboardPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <h1 className="flex items-center gap-3 text-3xl font-bold sm:text-4xl"><Trophy className="h-8 w-8 text-amber-300" aria-hidden />Leaderboard</h1>
+        <h1 data-title className="flex items-center gap-3 text-3xl font-bold sm:text-4xl"><Trophy className="h-8 w-8 text-amber-300" aria-hidden />Leaderboard</h1>
         <p className="mt-1 text-ink-300">Every player, ranked all-time by wins, then win rate.</p>
       </div>
 
-      {rows === null ? <div className="flex justify-center py-12 text-ink-400"><Spinner /></div>
+      {rows === null ? <div className="space-y-3"><div className="grid grid-cols-2 gap-3"><Skeleton className="h-24" /><Skeleton className="h-24" /></div><SkeletonRows rows={7} className="h-[4.5rem]" /></div>
         : error ? <p role="alert" className="rounded-2xl bg-hot-600/10 p-4 text-hot-400 ring-1 ring-hot-500/30">{error}</p>
         : rows.length === 0 ? <EmptyState icon={Trophy} title="No players yet">Players appear here as soon as they sign up.</EmptyState>
         : (
